@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# PSPDFKit assets (copy from node_modules after npm install)
+/public/pspdfkit-lib/
+
+# Claude Code
+.claude/

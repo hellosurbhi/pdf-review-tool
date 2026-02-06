@@ -1,36 +1,227 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📄 PDF Review & Versioning Tool
 
-## Getting Started
+> A full-featured PDF review platform with version control, visual diffing, and annotated export — built as a pure frontend Next.js application with local-first architecture.
 
-First, run the development server:
+![PDF Review Tool Screenshot](./docs/screenshot-placeholder.png)
+
+**[📖 Architecture](./ARCHITECTURE.md)** · **[📝 Process Log](./PROCESS.md)**
+
+---
+
+## ✨ Features
+
+### Upload & Viewing
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Drag & drop PDF upload | 🔄 In Progress | Upload PDFs via drag-drop or file picker |
+| PDF rendering | 🔄 In Progress | High-fidelity rendering via PSPDFKit SDK |
+| Page thumbnails | 🔄 In Progress | Visual navigation in left sidebar |
+| Zoom & pan controls | 🔄 In Progress | Standard PDF viewer controls |
+| Responsive layout | ✅ Implemented | Collapsible sidebars, mobile-friendly |
+
+### Editing & Annotations
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Highlight text | 📋 Planned | Yellow highlight with selection |
+| Add notes | 📋 Planned | Sticky note annotations |
+| Freetext annotations | 📋 Planned | Text boxes on PDF |
+| Text editing | 📋 Planned | Direct text modification |
+| Redaction | 📋 Planned | Permanently remove content |
+
+### Version Control
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Create versions | ✅ Implemented | Commit current state with message |
+| Version history | ✅ Implemented | Timeline in right sidebar |
+| Switch versions | 🔄 In Progress | Load any previous version |
+| Version metadata | ✅ Implemented | Timestamp, message, annotation count |
+
+### Diff & Compare
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Select versions to compare | ✅ Implemented | Pick any two versions |
+| Text diff | 📋 Planned | Show text changes between versions |
+| Annotation diff | 📋 Planned | Show annotation changes |
+| Visual diff overlay | 📋 Planned | Side-by-side comparison |
+
+### Export
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Export PDF | 📋 Planned | Download with/without annotations |
+| Flattened export | 📋 Planned | Burn annotations into PDF |
+| Annotated changelog | 📋 Planned | PDF with version history |
+
+### Backend / Storage
+| Feature | Status | Description |
+|---------|--------|-------------|
+| IndexedDB persistence | ✅ Implemented | Offline-first local storage |
+| Document CRUD | ✅ Implemented | Create, read, delete documents |
+| Version storage | ✅ Implemented | Full version history in DB |
+
+**Legend:** ✅ Implemented · 🔄 In Progress · 📋 Planned
+
+---
+
+## 🏗️ Tech Stack
+
+| Technology | Purpose | Why This Choice |
+|------------|---------|-----------------|
+| **[Next.js 14](https://nextjs.org/)** | Framework | App Router with React Server Components support; though client-heavy, enables future SSR/API routes |
+| **[TypeScript](https://www.typescriptlang.org/)** | Type Safety | Strict mode catches bugs early; comprehensive types serve as documentation |
+| **[Tailwind CSS v4](https://tailwindcss.com/)** | Styling | Native CSS nesting, better performance, utility-first approach |
+| **[shadcn/ui](https://ui.shadcn.com/)** | Components | Accessible, customizable primitives that own the code; no external dependency lock-in |
+| **[PSPDFKit](https://pspdfkit.com/)** | PDF Engine | Production-grade rendering + annotations; PDF.js lacks annotation UX out of the box |
+| **[Zustand](https://zustand-demo.pmnd.rs/)** | State | ~1KB, zero boilerplate vs Redux; two focused stores (document + version) |
+| **[Dexie](https://dexie.org/)** | IndexedDB | Promise-based API, handles binary blobs efficiently, schema migrations built-in |
+| **[pdf-lib](https://pdf-lib.js.org/)** | PDF Manipulation | Pure JS for merging/extracting pages without server |
+| **[diff-match-patch](https://github.com/google/diff-match-patch)** | Diffing | Google's battle-tested algorithm for text comparison |
+| **[Lucide React](https://lucide.dev/)** | Icons | Tree-shakeable, consistent design, lighter than FontAwesome |
+| **[Sonner](https://sonner.emilkowal.ski/)** | Toasts | Beautiful, accessible notifications with minimal API |
+
+---
+
+## 🚀 Quick Start
 
 ```bash
+# Clone the repository
+git clone https://github.com/yourusername/pdf-review-tool.git
+cd pdf-review-tool
+
+# Install dependencies
+npm install
+
+# Copy PSPDFKit assets (done automatically via postinstall, but manual if needed)
+mkdir -p public/pspdfkit-lib
+cp -R node_modules/pspdfkit/dist/pspdfkit-lib/* public/pspdfkit-lib/
+
+# Start development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### PSPDFKit Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This project uses PSPDFKit in **evaluation mode** (displays watermark). For production:
 
-## Learn More
+1. Get a license from [PSPDFKit](https://pspdfkit.com/try/)
+2. Add to `.env.local`:
+   ```env
+   NEXT_PUBLIC_PSPDFKIT_LICENSE_KEY=your-license-key
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+### Environment Variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_PSPDFKIT_LICENSE_KEY` | No | Removes PSPDFKit watermark |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 📐 Architecture Overview
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The application follows a **local-first architecture** — all data lives in IndexedDB, enabling offline functionality and instant operations.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Browser Client                               │
+├─────────────────────────────────────────────────────────────────────┤
+│  ┌──────────┐  ┌─────────────────────────────┐  ┌────────────────┐ │
+│  │  Left    │  │                             │  │     Right      │ │
+│  │ Sidebar  │  │       PDF Viewer            │  │    Sidebar     │ │
+│  │ (Pages)  │  │      (PSPDFKit)             │  │  (Versions)    │ │
+│  │  240px   │  │                             │  │    280px       │ │
+│  └──────────┘  └─────────────────────────────┘  └────────────────┘ │
+├─────────────────────────────────────────────────────────────────────┤
+│                      State Layer (Zustand)                          │
+│  ┌─────────────────────────┐    ┌─────────────────────────┐        │
+│  │   useDocumentStore      │    │    useVersionStore      │        │
+│  │   • currentDocument     │    │    • versions[]         │        │
+│  │   • isLoading           │    │    • diffResult         │        │
+│  └─────────────────────────┘    └─────────────────────────┘        │
+├─────────────────────────────────────────────────────────────────────┤
+│                    Persistence Layer (Dexie)                        │
+│  ┌──────────────┐  ┌──────────────┐                                │
+│  │  documents   │  │   versions   │                                │
+│  └──────────────┘  └──────────────┘                                │
+│                        IndexedDB                                    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for detailed diagrams including data flow, component hierarchy, and production scaling.
+
+---
+
+## 📁 Project Structure
+
+```
+src/
+├── app/
+│   ├── layout.tsx          # Root layout with Toaster
+│   ├── page.tsx            # Main 3-column layout
+│   ├── globals.css         # Tailwind + shadcn styles
+│   └── api/documents/      # API routes (future)
+│
+├── components/
+│   ├── ui/                 # shadcn/ui components
+│   ├── pdf/                # PDFViewer, Uploader, Thumbnails
+│   ├── version/            # VersionPanel, CommitDialog, DiffViewer
+│   └── export/             # ExportDialog, ExportButton
+│
+├── store/
+│   ├── useDocumentStore.ts # Document state
+│   └── useVersionStore.ts  # Version history state
+│
+├── lib/
+│   ├── db.ts               # Dexie IndexedDB schema
+│   ├── utils.ts            # shadcn utilities
+│   ├── pdf-utils.ts        # PDF operations (future)
+│   └── diff-utils.ts       # Version comparison (future)
+│
+└── types/
+    └── index.ts            # All TypeScript definitions
+```
+
+---
+
+## 🧪 Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm run start` | Start production server |
+| `npm run lint` | Run ESLint |
+
+---
+
+## 🔧 Key Design Decisions
+
+1. **Local-First**: IndexedDB storage enables offline use and instant operations
+2. **Immutable Versions**: Versions never modified after creation — true version control
+3. **Binary Data Isolation**: PDF ArrayBuffers in IndexedDB only, never React state
+4. **PSPDFKit over PDF.js**: Production-grade annotations without building from scratch
+5. **shadcn/ui**: Own the component code, no dependency lock-in
+
+### Known Limitations
+
+- PSPDFKit evaluation mode shows watermark
+- Large PDFs (>50MB) may impact performance
+- No cloud sync (IndexedDB is browser-local)
+
+---
+
+## 🚧 Future Improvements
+
+- [ ] Cloud sync option (S3/R2 + PostgreSQL)
+- [ ] Real-time collaboration (WebSocket)
+- [ ] Branch/merge for versions
+- [ ] Full-text search within documents
+- [ ] Batch operations for multiple PDFs
+- [ ] Mobile app (React Native)
+
+---
+
+## 📄 License
+
+This project was created for a technical assessment. Code is available for review purposes.
