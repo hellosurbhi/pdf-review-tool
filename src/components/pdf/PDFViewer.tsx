@@ -3,14 +3,16 @@
 /**
  * PDFViewer Component
  *
- * Renders PDF using PSPDFKit SDK.
+ * Renders PDF using PSPDFKit SDK with full toolbar configuration.
  * - Loads dynamically to avoid SSR issues with WebAssembly
- * - Manages PSPDFKit instance lifecycle
- * - Provides callbacks for page changes and annotations
+ * - Configures toolbar: zoom, page nav, search, annotation tools
+ * - Enables text selection, thumbnails sidebar, search with hit count
+ * - Manages PSPDFKit instance lifecycle with proper cleanup
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { versionOps } from '@/lib/db';
 
 interface PDFViewerProps {
@@ -32,23 +34,23 @@ export interface PSPDFKitInstanceType {
   exportPDF: () => Promise<ArrayBuffer>;
   getAnnotations: (pageIndex: number) => Promise<unknown>;
   dispose: () => void;
+  contentDocument: Document;
+  setToolbarItems: (items: ToolbarItem[]) => void;
 }
 
 interface ViewState {
   currentPageIndex: number;
-  set: (key: string, value: number) => ViewState;
+  set: (key: string, value: number | string) => ViewState;
+}
+
+interface ToolbarItem {
+  type: string;
+  [key: string]: unknown;
 }
 
 interface PSPDFKitModule {
-  load: (config: PSPDFKitConfig) => Promise<PSPDFKitInstanceType>;
+  load: (config: Record<string, unknown>) => Promise<PSPDFKitInstanceType>;
   unload: (container: HTMLElement) => Promise<void>;
-}
-
-interface PSPDFKitConfig {
-  container: HTMLElement | string;
-  document: ArrayBuffer;
-  baseUrl: string;
-  licenseKey?: string;
 }
 
 export function PDFViewer({
@@ -72,7 +74,7 @@ export function PDFViewer({
   }, [onPageChange]);
 
   /**
-   * Load PSPDFKit and render PDF
+   * Load PSPDFKit and render PDF with full configuration
    */
   useEffect(() => {
     const container = containerRef.current;
@@ -93,7 +95,7 @@ export function PDFViewer({
 
         if (!isMounted) return;
 
-        // Dynamically import PSPDFKit (default export)
+        // Dynamically import PSPDFKit
         const pspdfkitModule = await import('pspdfkit');
         const PSPDFKit = pspdfkitModule.default as unknown as PSPDFKitModule;
 
@@ -109,12 +111,40 @@ export function PDFViewer({
           instanceRef.current = null;
         }
 
-        // Load new instance
+        // Load PSPDFKit with full configuration
         const instance = await PSPDFKit.load({
           container,
           document: pdfData,
           baseUrl: `${window.location.origin}/pspdfkit-lib/`,
           licenseKey: process.env.NEXT_PUBLIC_PSPDFKIT_LICENSE_KEY,
+          // Enable text selection
+          disableTextSelection: false,
+          // Enable built-in sidebar with thumbnails
+          initialViewState: new (pspdfkitModule as unknown as {
+            ViewState: new (config: Record<string, unknown>) => unknown;
+          }).ViewState({
+            sidebarMode: null, // Start without sidebar (we have custom thumbnails)
+          }),
+          // Toolbar configuration
+          toolbarItems: [
+            { type: 'sidebar-thumbnails' },
+            { type: 'sidebar-bookmarks' },
+            { type: 'pager' },
+            { type: 'zoom-out' },
+            { type: 'zoom-in' },
+            { type: 'zoom-mode' },
+            { type: 'spacer' },
+            { type: 'search' },
+            { type: 'spacer' },
+            { type: 'annotate' },
+            { type: 'ink' },
+            { type: 'highlighter' },
+            { type: 'text-highlighter' },
+            { type: 'note' },
+            { type: 'text' },
+            { type: 'spacer' },
+            { type: 'print' },
+          ],
         });
 
         if (!isMounted) {
@@ -164,9 +194,19 @@ export function PDFViewer({
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-destructive mb-2">Failed to load PDF</p>
-          <p className="text-sm text-muted-foreground">{error}</p>
+        <div className="text-center max-w-sm px-4">
+          <div className="mx-auto w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center mb-4">
+            <AlertTriangle className="h-6 w-6 text-destructive" />
+          </div>
+          <h3 className="font-semibold mb-1">Failed to load PDF</h3>
+          <p className="text-sm text-muted-foreground mb-4">{error}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.reload()}
+          >
+            Reload page
+          </Button>
         </div>
       </div>
     );
@@ -176,16 +216,15 @@ export function PDFViewer({
     <div className="relative flex-1 min-h-0">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <span className="text-muted-foreground">Loading PDF...</span>
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="text-sm text-muted-foreground">Loading PDF...</span>
           </div>
         </div>
       )}
       <div
         ref={containerRef}
         className="w-full h-full"
-        style={{ minHeight: '500px' }}
       />
     </div>
   );

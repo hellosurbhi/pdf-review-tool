@@ -124,3 +124,27 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Dark sidebar theme for left/right sidebars */
+.sidebar-dark {
+  background-color: #1a1a2e;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Override scrollbar in dark sidebars */
+.sidebar-dark [data-radix-scroll-area-viewport] {
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.sidebar-dark [data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-dark [data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.sidebar-dark [data-radix-scroll-area-viewport]::-webkit-scrollbar-track {
+  background: transparent;
+}

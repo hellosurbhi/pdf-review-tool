@@ -5,10 +5,11 @@
  *
  * Displays clickable page thumbnails in the left sidebar.
  * - Shows page numbers with visual selection state
- * - Allows navigation to specific pages
- * - Updates when current page changes in the viewer
+ * - Current page highlighted with accent blue border
+ * - Styled for dark sidebar theme
  */
 
+import { useRef, useEffect } from 'react';
 import { FileText } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -24,10 +25,21 @@ export function PageThumbnails({
   currentPage,
   onPageSelect,
 }: PageThumbnailsProps) {
+  const activeRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * Scroll active thumbnail into view when current page changes
+   */
+  useEffect(() => {
+    if (activeRef.current) {
+      activeRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [currentPage]);
+
   if (totalPages === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-4">
-        <p className="text-sm text-muted-foreground text-center">
+        <p className="text-sm text-slate-500 text-center">
           No pages to display
         </p>
       </div>
@@ -40,31 +52,31 @@ export function PageThumbnails({
         {Array.from({ length: totalPages }, (_, index) => (
           <button
             key={index}
+            ref={index === currentPage ? activeRef : null}
             onClick={() => onPageSelect(index)}
             className={cn(
-              'w-full aspect-[3/4] rounded-lg border-2 transition-all',
+              'w-full aspect-[3/4] rounded-lg border-2 transition-all duration-150',
               'flex flex-col items-center justify-center gap-1',
-              'hover:border-primary/50 hover:bg-muted/50',
-              'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
+              'focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-0',
               currentPage === index
-                ? 'border-primary bg-primary/5'
-                : 'border-muted bg-card'
+                ? 'border-blue-500 bg-blue-500/10'
+                : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
             )}
           >
             <FileText
               className={cn(
                 'h-8 w-8',
                 currentPage === index
-                  ? 'text-primary'
-                  : 'text-muted-foreground/50'
+                  ? 'text-blue-400'
+                  : 'text-slate-500'
               )}
             />
             <span
               className={cn(
                 'text-sm font-medium',
                 currentPage === index
-                  ? 'text-primary'
-                  : 'text-muted-foreground'
+                  ? 'text-blue-300'
+                  : 'text-slate-400'
               )}
             >
               {index + 1}

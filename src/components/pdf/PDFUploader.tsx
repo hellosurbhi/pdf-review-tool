@@ -3,23 +3,17 @@
 /**
  * PDFUploader Component
  *
- * Drag-and-drop PDF upload with file validation.
- * - Accepts only PDF files
- * - Max file size: 50MB
- * - Creates document and initial version in IndexedDB
+ * Full-screen drop zone for PDF upload when no document is loaded.
+ * - Drag-and-drop with animated visual feedback
+ * - File picker fallback via "Browse Files" button
+ * - Validates PDF type and 50MB size limit
+ * - Creates document + V1 in IndexedDB on success
  */
 
-import { useCallback, useState } from 'react';
-import { Upload, FileText, X, Loader2 } from 'lucide-react';
+import { useCallback, useState, useRef } from 'react';
+import { Upload, FileText, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useVersionStore } from '@/store/useVersionStore';
 import { documentOps, versionOps, generateId } from '@/lib/db';
@@ -28,15 +22,10 @@ import type { PDFDocument, Version } from '@/types';
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ACCEPTED_TYPES = ['application/pdf'];
 
-interface PDFUploaderProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
-export function PDFUploader({ open, onOpenChange }: PDFUploaderProps) {
+export function PDFUploader() {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { addDocument, setLoading } = useDocumentStore();
   const { addVersion, setVersions } = useVersionStore();
@@ -45,237 +34,234 @@ export function PDFUploader({ open, onOpenChange }: PDFUploaderProps) {
    * Validate file type and size
    */
   const validateFile = useCallback((file: File): string | null => {
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      return 'Please upload a PDF file';
+    if (!ACCEPTED_TYPES.includes(file.type) && !file.name.endsWith('.pdf')) {
+      return 'Only PDF files are accepted';
     }
     if (file.size > MAX_FILE_SIZE) {
-      return `File size must be less than ${MAX_FILE_SIZE / 1024 / 1024}MB`;
+      return `File too large — maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB`;
     }
     return null;
   }, []);
 
   /**
-   * Handle file selection from drag-drop or file picker
+   * Process the selected file: validate, read, store in IndexedDB
    */
-  const handleFileSelect = useCallback(
-    (file: File) => {
+  const processFile = useCallback(
+    async (file: File) => {
       const error = validateFile(file);
       if (error) {
         toast.error(error);
         return;
       }
-      setSelectedFile(file);
+
+      setIsUploading(true);
+      setLoading(true);
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+
+        const docId = generateId();
+        const versionId = generateId();
+
+        const document: PDFDocument = {
+          id: docId,
+          name: file.name,
+          createdAt: new Date(),
+          currentVersionId: versionId,
+        };
+
+        const version: Version = {
+          id: versionId,
+          documentId: docId,
+          versionNumber: 1,
+          message: 'Initial upload',
+          pdfData: arrayBuffer,
+          annotations: '[]',
+          textContent: '',
+          createdAt: new Date(),
+        };
+
+        await documentOps.create(document);
+        await versionOps.create(version);
+
+        addDocument(document);
+        setVersions([version]);
+        addVersion(version);
+
+        toast.success('Document uploaded — Version 1 created');
+      } catch (err) {
+        console.error('Upload failed:', err);
+        toast.error('Failed to upload PDF. Please try again.');
+      } finally {
+        setIsUploading(false);
+        setLoading(false);
+      }
     },
-    [validateFile]
+    [validateFile, addDocument, addVersion, setVersions, setLoading]
   );
 
   /**
-   * Process and upload the selected file
+   * Drag event handlers with counter to prevent flicker from child elements
    */
-  const handleUpload = async () => {
-    if (!selectedFile) return;
+  const dragCounterRef = useRef(0);
 
-    setIsUploading(true);
-    setLoading(true);
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    setIsDragging(true);
+  }, []);
 
-    try {
-      // Read file as ArrayBuffer
-      const arrayBuffer = await selectedFile.arrayBuffer();
-
-      // Create document record
-      const docId = generateId();
-      const versionId = generateId();
-
-      const document: PDFDocument = {
-        id: docId,
-        name: selectedFile.name,
-        createdAt: new Date(),
-        currentVersionId: versionId,
-      };
-
-      // Create initial version
-      const version: Version = {
-        id: versionId,
-        documentId: docId,
-        versionNumber: 1,
-        message: 'Initial upload',
-        pdfData: arrayBuffer,
-        annotations: '[]',
-        textContent: '', // Will be extracted by PSPDFKit later
-        createdAt: new Date(),
-      };
-
-      // Save to IndexedDB
-      await documentOps.create(document);
-      await versionOps.create(version);
-
-      // Update stores
-      addDocument(document);
-      setVersions([version]);
-      addVersion(version);
-
-      toast.success(`Uploaded ${selectedFile.name}`);
-      onOpenChange(false);
-      setSelectedFile(null);
-    } catch (error) {
-      console.error('Upload failed:', error);
-      toast.error('Failed to upload PDF. Please try again.');
-    } finally {
-      setIsUploading(false);
-      setLoading(false);
-    }
-  };
-
-  /**
-   * Drag event handlers
-   */
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
   }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      dragCounterRef.current = 0;
       setIsDragging(false);
 
       const files = e.dataTransfer.files;
       if (files.length > 0) {
-        handleFileSelect(files[0]);
+        processFile(files[0]);
       }
     },
-    [handleFileSelect]
+    [processFile]
   );
 
-  /**
-   * File input change handler
-   */
   const handleFileInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (files && files.length > 0) {
-        handleFileSelect(files[0]);
+        processFile(files[0]);
+      }
+      // Reset input so the same file can be re-selected
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
     },
-    [handleFileSelect]
+    [processFile]
   );
 
-  /**
-   * Reset state when dialog closes
-   */
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) {
-      setSelectedFile(null);
-      setIsDragging(false);
-    }
-    onOpenChange(newOpen);
-  };
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Upload PDF</DialogTitle>
-          <DialogDescription>
-            Drag and drop a PDF file or click to browse.
-          </DialogDescription>
-        </DialogHeader>
+    <div
+      className={`
+        flex-1 flex items-center justify-center relative
+        transition-all duration-300 ease-out
+        ${isDragging
+          ? 'bg-blue-500/5'
+          : 'bg-gradient-to-b from-muted/20 to-muted/5'
+        }
+      `}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Full-screen drop zone overlay */}
+      <div
+        className={`
+          absolute inset-4 rounded-2xl border-2 transition-all duration-300 ease-out pointer-events-none
+          ${isDragging
+            ? 'border-solid border-blue-500 bg-blue-500/5 scale-[0.99]'
+            : 'border-dashed border-muted-foreground/20'
+          }
+        `}
+      />
 
-        <div className="space-y-4">
-          {/* Drop zone */}
-          <div
-            className={`
-              relative border-2 border-dashed rounded-lg p-8
-              transition-colors cursor-pointer
-              ${isDragging
-                ? 'border-primary bg-primary/5'
-                : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-              }
-              ${selectedFile ? 'bg-muted/30' : ''}
-            `}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => document.getElementById('file-input')?.click()}
-          >
-            <input
-              id="file-input"
-              type="file"
-              accept=".pdf,application/pdf"
-              className="hidden"
-              onChange={handleFileInputChange}
-            />
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        className="hidden"
+        onChange={handleFileInputChange}
+      />
 
-            {selectedFile ? (
-              <div className="flex items-center justify-center gap-3">
-                <FileText className="h-8 w-8 text-primary" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedFile(null);
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-center">
-                <Upload className="h-10 w-10 text-muted-foreground/50" />
-                <p className="text-sm text-muted-foreground">
-                  Drop your PDF here or click to browse
-                </p>
-                <p className="text-xs text-muted-foreground/70">
-                  Max file size: 50MB
-                </p>
-              </div>
-            )}
+      {/* Center content */}
+      <div className="relative z-10 text-center max-w-md px-8">
+        {isUploading ? (
+          <div className="space-y-4">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 text-primary animate-spin" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-foreground">
+                Processing document...
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Reading PDF and creating initial version
+              </p>
+            </div>
           </div>
-
-          {/* Upload button */}
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => handleOpenChange(false)}
-              disabled={isUploading}
+        ) : (
+          <div className="space-y-6">
+            {/* Icon */}
+            <div
+              className={`
+                mx-auto w-20 h-20 rounded-2xl flex items-center justify-center
+                transition-all duration-300 ease-out
+                ${isDragging
+                  ? 'bg-blue-500/10 scale-110'
+                  : 'bg-muted/50'
+                }
+              `}
             >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUpload}
-              disabled={!selectedFile || isUploading}
-            >
-              {isUploading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Uploading...
-                </>
+              {isDragging ? (
+                <FileText
+                  className="h-10 w-10 text-blue-500 transition-all duration-300 animate-bounce"
+                />
               ) : (
-                <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload
-                </>
+                <Upload className="h-10 w-10 text-muted-foreground/60" />
               )}
+            </div>
+
+            {/* Text */}
+            <div className="space-y-2">
+              <h2
+                className={`
+                  text-xl font-semibold transition-colors duration-200
+                  ${isDragging ? 'text-blue-500' : 'text-foreground'}
+                `}
+              >
+                {isDragging ? 'Drop your PDF here' : 'Upload a PDF to get started'}
+              </h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Drag and drop a PDF file here, or click the button below
+                to browse your files.
+              </p>
+            </div>
+
+            {/* Browse button */}
+            <Button
+              size="lg"
+              className="px-8"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Browse Files
             </Button>
+
+            {/* Constraints */}
+            <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground/60">
+              <AlertCircle className="h-3 w-3" />
+              <span>PDF files only, up to 50MB</span>
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        )}
+      </div>
+    </div>
   );
 }

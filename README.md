@@ -13,18 +13,24 @@
 ### Upload & Viewing
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Drag & drop PDF upload | ✅ Implemented | Upload PDFs via drag-drop or file picker |
+| Full-screen upload zone | ✅ Implemented | Drag-drop with animated visual feedback, Browse Files button |
 | PDF rendering | ✅ Implemented | High-fidelity rendering via PSPDFKit SDK |
-| Page thumbnails | ✅ Implemented | Visual navigation in left sidebar |
-| Zoom & pan controls | ✅ Implemented | Standard PDF viewer controls (via PSPDFKit) |
-| Responsive layout | ✅ Implemented | Collapsible sidebars, mobile-friendly |
+| Page thumbnails | ✅ Implemented | Visual navigation in dark-themed left sidebar |
+| Zoom & pan controls | ✅ Implemented | PSPDFKit toolbar with zoom, pager, search |
+| Annotation toolbar | ✅ Implemented | Ink, highlighter, text-highlighter, notes, text tools |
+| Text selection | ✅ Implemented | Select and copy text from PDFs |
+| Search | ✅ Implemented | PSPDFKit search with hit count and prev/next |
+| Dark sidebars | ✅ Implemented | #1a1a2e sidebar theme with lighter main area |
+| Version badge | ✅ Implemented | Shows current version (V1) in header |
+| Responsive layout | ✅ Implemented | Collapsible sidebars, smooth transitions |
 
 ### Editing & Annotations
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Highlight text | 📋 Planned | Yellow highlight with selection |
-| Add notes | 📋 Planned | Sticky note annotations |
-| Freetext annotations | 📋 Planned | Text boxes on PDF |
+| Highlight text | ✅ Implemented | PSPDFKit text-highlighter tool in toolbar |
+| Add notes | ✅ Implemented | PSPDFKit note annotation tool |
+| Freetext annotations | ✅ Implemented | PSPDFKit text tool in toolbar |
+| Ink drawing | ✅ Implemented | PSPDFKit ink tool in toolbar |
 | Text editing | 📋 Planned | Direct text modification |
 | Redaction | 📋 Planned | Permanently remove content |
 

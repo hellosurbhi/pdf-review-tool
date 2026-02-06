@@ -187,3 +187,63 @@ pdf-review-tool/
 - [ ] Annotation tools integration
 
 ---
+
+## Phase 1.1: Upload & Viewer Polish
+
+**Date:** 2026-02-06
+
+### What Was Built
+
+1. **Full-Screen Upload Zone** (`src/components/pdf/PDFUploader.tsx`)
+   - Replaced dialog-based upload with full-screen inline drop zone
+   - Animated drag feedback: dashed border turns solid blue, icon bounces
+   - Drag counter prevents flicker when dragging over child elements
+   - Centered polished UI with "Browse Files" CTA button
+   - Loading state with spinner while processing document
+   - Correct toast: "Document uploaded — Version 1 created"
+
+2. **Enhanced PDF Viewer** (`src/components/pdf/PDFViewer.tsx`)
+   - Full PSPDFKit toolbar configuration: zoom, pager, search, annotation tools
+   - Toolbar items: sidebar-thumbnails, bookmarks, pager, zoom controls, search, annotate, ink, highlighter, text-highlighter, note, text, print
+   - Text selection enabled via `disableTextSelection: false`
+   - PSPDFKit's built-in thumbnail sidebar available via toolbar toggle
+   - Improved error state with AlertTriangle icon and reload button
+
+3. **Dark Sidebar Theme** (`src/app/globals.css`)
+   - Added `.sidebar-dark` CSS class with `#1a1a2e` background
+   - Custom scrollbar styling for dark sidebars
+   - Both left (page thumbnails) and right (version history) sidebars use dark theme
+
+4. **Layout Improvements** (`src/app/page.tsx`)
+   - Version badge ("V1") displayed in header next to document name
+   - Commit button and Export button in header (disabled, wired for Phase 2)
+   - Sidebars only render when a document is loaded (clean upload screen)
+   - Smooth transitions between upload zone and viewer
+   - Dark-themed sidebars with slate color text for readability
+
+5. **Page Thumbnails Update** (`src/components/pdf/PageThumbnails.tsx`)
+   - Styled for dark sidebar: white/10 borders, slate text colors
+   - Active page scrolls into view automatically
+   - Blue accent border and background for current page
+
+### Key Technical Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Inline upload instead of dialog** | Full-screen drop zone matches spec; more inviting UX when no document is loaded |
+| **Drag counter pattern** | Using a counter instead of `dragLeave` prevents flicker when dragging over child elements |
+| **PSPDFKit toolbar config** | Provides zoom, search, annotation tools out of the box without custom implementation |
+| **`.sidebar-dark` CSS class** | Achieves mixed theme (dark sidebars, light main area) without full dark mode toggle |
+| **Conditional sidebar rendering** | Upload screen shows clean without empty sidebars; sidebars appear on document load |
+
+### Files Modified
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/components/pdf/PDFUploader.tsx` | Rewritten | Full-screen drop zone with animations |
+| `src/components/pdf/PDFViewer.tsx` | Enhanced | PSPDFKit toolbar/search/annotation config |
+| `src/components/pdf/PageThumbnails.tsx` | Updated | Dark sidebar styling, auto-scroll |
+| `src/app/page.tsx` | Rewritten | Version badge, commit button, dark sidebars |
+| `src/app/globals.css` | Updated | Added sidebar-dark theme class |
+
+---

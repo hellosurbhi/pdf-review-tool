@@ -341,3 +341,31 @@ flowchart TB
 4. **Type Safety**: Comprehensive TypeScript types, no `any`
 5. **Component Isolation**: Each component has single responsibility
 6. **Lazy Loading**: PSPDFKit loaded dynamically to reduce bundle size
+
+## UI Theme Strategy
+
+The application uses a **mixed theme** approach:
+- **Header**: Light background (`bg-card`) with standard foreground colors
+- **Sidebars**: Dark theme (`#1a1a2e`) with slate-colored text for document navigation contrast
+- **Main viewer area**: Light neutral background for optimal PDF readability
+- **Accents**: Blue (`blue-500`) for selection states, active pages, and current version highlighting
+
+This avoids a full dark mode toggle while providing visual hierarchy that separates navigation (dark) from content (light).
+
+## Upload-to-Viewer Flow
+
+```
+No Document                    Document Loaded
+┌──────────────────────┐      ┌───┬──────────────┬────┐
+│       Header         │      │   │   Header      │    │
+├──────────────────────┤      ├───┼──────────────┼────┤
+│                      │      │   │              │    │
+│                      │      │ P │              │ V  │
+│   Full-screen        │ ──►  │ a │  PDF Viewer  │ e  │
+│   Upload Drop Zone   │      │ g │  (PSPDFKit)  │ r  │
+│                      │      │ e │              │ s  │
+│                      │      │ s │              │    │
+└──────────────────────┘      └───┴──────────────┴────┘
+```
+
+Sidebars only render when a document is loaded, keeping the upload screen clean and focused.
