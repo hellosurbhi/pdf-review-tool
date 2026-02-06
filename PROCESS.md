@@ -10,7 +10,7 @@ This project was built using a **plan-first, phase-by-phase approach**:
 
 1. **Upfront Architecture**: Before writing code, the full system was designed — component hierarchy, data flow, state management, and database schema were documented in ARCHITECTURE.md.
 
-2. **Phased Implementation**: The project was split into 7 distinct phases (0–6), each with a clear scope. Each phase was completed and committed before moving to the next, ensuring the application was always in a working state.
+2. **Phased Implementation**: The project was split into 8 distinct phases (0–7), each with a clear scope. Each phase was completed and committed before moving to the next, ensuring the application was always in a working state.
 
 3. **Convention-Driven Development**: Project conventions (import order, naming, component structure, JSDoc, `useCallback` for handlers) were established in Phase 0 and followed consistently across all phases.
 
@@ -291,6 +291,43 @@ This project was built using a **plan-first, phase-by-phase approach**:
 | `README.md` | Rewritten | Professional open-source format |
 | `ARCHITECTURE.md` | Rewritten | 6 Mermaid diagrams + scaling tables |
 | `PROCESS.md` | Finalized | All phases + methodology + retrospective |
+
+---
+
+## Phase 7: Build Verification & Deploy Preparation
+
+**Date:** 2026-02-06
+
+### What Was Done
+
+1. **Build Verification**
+   - `npm run build` — clean pass, all routes compiled (static + dynamic)
+   - `npx tsc --noEmit` — zero type errors in strict mode
+   - All 6 API routes registered: `/api/documents`, `/api/documents/[id]`, `/api/documents/[id]/versions`, `/api/documents/[id]/diff`
+
+2. **Gitignore Audit** — Verified entries for `node_modules/`, `.next/`, `.env*`, `public/pspdfkit-lib/`, `.claude/`
+
+3. **Vercel Configuration**
+   - Created `vercel.json` with CORS headers for PSPDFKit WASM (`Cross-Origin-Embedder-Policy`, `Cross-Origin-Opener-Policy`) and immutable cache headers for static assets
+   - PSPDFKit assets handled automatically via `postinstall` script during Vercel build
+
+4. **README Deployment Section** — Added step-by-step Vercel CLI and Dashboard deployment instructions, plus PSPDFKit WASM troubleshooting notes
+
+### Key Technical Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **`vercel.json` for CORS headers** | Ensures PSPDFKit `SharedArrayBuffer` works on Vercel; `next.config.ts` headers also set as fallback |
+| **Immutable cache on WASM** | PSPDFKit WASM/font files are versioned and never change; 1-year cache reduces load times |
+| **No standalone output mode** | Default Vercel serverless functions work fine with Next.js App Router; standalone adds complexity |
+
+### Files Created/Modified
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `vercel.json` | Created | CORS + cache headers for PSPDFKit WASM deployment |
+| `README.md` | Modified | Added Deployment section with Vercel CLI + Dashboard instructions |
+| `PROCESS.md` | Modified | Added Phase 7 documentation |
 
 ---
 

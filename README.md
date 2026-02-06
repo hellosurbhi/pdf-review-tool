@@ -295,6 +295,40 @@ Error responses follow the format `{ error: "description" }` with appropriate HT
 
 ---
 
+## Deployment
+
+### Deploy to Vercel
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Login to Vercel
+vercel login
+
+# Deploy to production
+vercel --prod
+```
+
+The project includes a `vercel.json` that configures:
+- **CORS headers** for PSPDFKit WASM (`Cross-Origin-Embedder-Policy`, `Cross-Origin-Opener-Policy`)
+- **Cache headers** for immutable WASM/font assets (1 year)
+
+PSPDFKit assets are copied automatically during `npm install` via the `postinstall` script.
+
+### Deploy via Vercel Dashboard
+
+1. Push the repository to GitHub
+2. Go to [vercel.com/new](https://vercel.com/new) and import the repository
+3. Framework Preset: **Next.js** (auto-detected)
+4. Click **Deploy** — no additional configuration needed
+
+### PSPDFKit on Vercel
+
+PSPDFKit requires `SharedArrayBuffer`, which needs specific CORS headers. Both `next.config.ts` and `vercel.json` set these headers on `/pspdfkit-lib/*` routes. If you see a blank viewer after deploy, verify these headers are being served using browser DevTools (Network tab).
+
+---
+
 ## Key Design Decisions
 
 1. **Local-First**: IndexedDB storage enables offline use and instant operations
