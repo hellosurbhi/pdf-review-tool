@@ -86,13 +86,41 @@ sequenceDiagram
     User->>UI: Confirm
     UI->>PSPDFKit: exportPDF()
     PSPDFKit-->>UI: ArrayBuffer (PDF data)
-    UI->>PSPDFKit: getAnnotations()
-    PSPDFKit-->>UI: Annotations array
-    UI->>UI: Extract text content
+    UI->>PSPDFKit: exportInstantJSON()
+    PSPDFKit-->>UI: Annotation JSON
+    UI->>PSPDFKit: textLinesForPageIndex(0..N)
+    PSPDFKit-->>UI: Text per page
     UI->>DB: versionOps.create(version)
     DB-->>UI: Version ID
     UI->>Store: addVersion(version)
+    UI->>Store: clearChanges()
     UI->>User: Show success toast
+```
+
+## Data Flow - Version Switching
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI as Version Panel
+    participant Store as useVersionStore
+    participant AnnStore as useAnnotationStore
+    participant Viewer as PDFViewer
+    participant DB as Dexie (IndexedDB)
+
+    User->>UI: Click version card
+    alt Has unsaved changes
+        UI->>UI: Show warning dialog
+        User->>UI: Confirm discard
+        UI->>AnnStore: clearChanges()
+    end
+    UI->>Store: setCurrentVersion(id)
+    Store-->>Viewer: versionId prop changes
+    Viewer->>DB: versionOps.getPdfData(id)
+    DB-->>Viewer: ArrayBuffer
+    Viewer->>Viewer: Reload PSPDFKit instance
+    Viewer->>AnnStore: syncAnnotations()
+    Viewer->>User: Show info toast
 ```
 
 ## Data Flow - Version Comparison

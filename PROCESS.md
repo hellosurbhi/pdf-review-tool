@@ -338,9 +338,79 @@ pdf-review-tool/
 
 ### What's Next (Phase 3)
 
-- [ ] Version creation with commit message dialog
-- [ ] Version switching and loading
+- [x] Version creation with commit message dialog
+- [x] Version switching and loading
 - [ ] Diff/comparison between versions
 - [ ] Export PDF functionality
+
+---
+
+## Phase 3: Version History System
+
+**Date:** 2026-02-06
+
+### What Was Built
+
+1. **CommitDialog Component** (`src/components/version/CommitDialog.tsx`)
+   - Modal dialog for creating new versions (commits)
+   - Auto-generated version number (max existing + 1)
+   - Required commit message textarea with placeholder
+   - Change summary panel: shows added/modified/removed annotation counts
+   - Exports PDF data via `exportPDF()`, annotations via `exportInstantJSON()`
+   - Extracts text from every page via `textLinesForPageIndex()` for future diffing
+   - Saves version to IndexedDB, clears unsaved changes, shows success toast
+   - Loading state with spinner during commit
+
+2. **VersionPanel Component** (`src/components/version/VersionPanel.tsx`)
+   - Replaces inline version list in right sidebar
+   - Reverse chronological order with clickable version cards
+   - Version badge (V1, V2, ...) with blue accent left border for current
+   - Commit message truncated to one line
+   - Relative timestamps (just now, 5m ago, 2h ago, 3d ago)
+   - Annotation count badge per version
+   - Click to switch versions, triggers PSPDFKit reload via versionId prop change
+   - Unsaved changes warning dialog: "You have X unsaved changes. Switching versions will discard them." with Cancel/Discard & Switch buttons
+   - "Create Version" button at bottom wired to CommitDialog
+
+3. **PSPDFKit Type Updates** (`src/components/pdf/PDFViewer.tsx`)
+   - Added `exportInstantJSON()` to `PSPDFKitInstanceType`
+   - Added `textLinesForPageIndex()` to `PSPDFKitInstanceType`
+   - Added `PSPDFKitTextLine` interface
+
+4. **Page Integration** (`src/app/page.tsx`)
+   - Commit button in header now opens CommitDialog (no longer disabled)
+   - Replaced inline version list with VersionPanel component
+   - CommitDialog receives PSPDFKit instance ref for export operations
+   - Version switching triggers PDFViewer reload (versionId prop changes)
+   - Removed unused ScrollArea import
+
+### Key Technical Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Text extraction via textLinesForPageIndex** | PSPDFKit's per-page text line API gives structured text with positions; stored as JSON `[{ pageIndex, text }]` for future diffing |
+| **exportInstantJSON for annotations** | Captures full PSPDFKit annotation state including tool-specific data not in our TrackedAnnotation |
+| **Unsaved changes warning dialog** | Prevents accidental data loss when switching versions with pending changes |
+| **Version switching via versionId prop** | PDFViewer already reloads when `versionId` changes; no additional reload logic needed |
+| **Relative timestamps** | More user-friendly than absolute dates for recent activity |
+| **Annotation count from JSON** | Parses version annotations JSON to show count badge without loading full data |
+
+### Files Created/Modified
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/components/version/CommitDialog.tsx` | Created | Version commit dialog with export + text extraction |
+| `src/components/version/VersionPanel.tsx` | Created | Version history panel with switching + warning |
+| `src/components/version/index.ts` | Created | Component re-exports |
+| `src/components/pdf/PDFViewer.tsx` | Modified | Added exportInstantJSON, textLinesForPageIndex, PSPDFKitTextLine |
+| `src/components/pdf/index.ts` | Modified | Added PSPDFKitTextLine export |
+| `src/app/page.tsx` | Modified | Wired CommitDialog, replaced inline version list with VersionPanel |
+
+### What's Next (Phase 4)
+
+- [ ] Diff/comparison between versions (text diff, annotation diff)
+- [ ] Visual diff overlay (side-by-side)
+- [ ] Export PDF functionality
+- [ ] Flattened export (annotations burned in)
 
 ---

@@ -43,10 +43,11 @@
 ### Version Control
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Create versions | ✅ Implemented | Commit current state with message |
-| Version history | ✅ Implemented | Timeline in right sidebar |
-| Switch versions | 🔄 In Progress | Load any previous version |
-| Version metadata | ✅ Implemented | Timestamp, message, annotation count |
+| Create versions | ✅ Implemented | Commit dialog with message, exports PDF + annotations + text |
+| Version history | ✅ Implemented | Timeline in right sidebar with relative timestamps |
+| Switch versions | ✅ Implemented | Load any previous version with unsaved changes warning |
+| Version metadata | ✅ Implemented | Timestamp, message, annotation count badge |
+| Text extraction | ✅ Implemented | Per-page text extraction stored for future diffing |
 
 ### Diff & Compare
 | Feature | Status | Description |

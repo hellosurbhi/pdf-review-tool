@@ -34,7 +34,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   PDFUploader,
@@ -45,6 +44,7 @@ import {
   goToPage,
   type PSPDFKitInstanceType,
 } from '@/components/pdf';
+import { CommitDialog, VersionPanel } from '@/components/version';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useVersionStore } from '@/store/useVersionStore';
 import { useUnsavedChangeCount, useAnnotations } from '@/store/useAnnotationStore';
@@ -54,6 +54,7 @@ export default function Home() {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [commitDialogOpen, setCommitDialogOpen] = useState(false);
 
   const pspdfkitInstanceRef = useRef<PSPDFKitInstanceType | null>(null);
 
@@ -131,7 +132,11 @@ export default function Home() {
 
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm" disabled>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCommitDialogOpen(true)}
+                    >
                       <GitCommitHorizontal className="h-4 w-4 mr-1.5" />
                       Commit
                     </Button>
@@ -323,60 +328,7 @@ export default function Home() {
 
                     {/* Version History Tab */}
                     <TabsContent value="versions" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden">
-                      <ScrollArea className="flex-1">
-                        <div className="p-3 space-y-2">
-                          {versions.length === 0 ? (
-                            <p className="text-sm text-slate-500 text-center py-8">
-                              No versions yet
-                            </p>
-                          ) : (
-                            versions.map((version) => (
-                              <div
-                                key={version.id}
-                                className={`
-                                  p-3 rounded-lg border cursor-pointer transition-colors
-                                  ${version.id === currentVersionId
-                                    ? 'border-blue-500/50 bg-blue-500/10'
-                                    : 'border-white/10 hover:bg-white/5'
-                                  }
-                                `}
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <Badge
-                                    variant="secondary"
-                                    className={`
-                                      text-xs font-mono px-1.5 py-0
-                                      ${version.id === currentVersionId
-                                        ? 'bg-blue-500/20 text-blue-300'
-                                        : 'bg-white/10 text-slate-300'
-                                      }
-                                    `}
-                                  >
-                                    V{version.versionNumber}
-                                  </Badge>
-                                  <span className="text-xs text-slate-500">
-                                    {new Date(version.createdAt).toLocaleDateString()}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-slate-400 truncate">
-                                  {version.message}
-                                </p>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </ScrollArea>
-                      <div className="p-3 border-t border-white/10">
-                        <Button
-                          className="w-full"
-                          variant="outline"
-                          size="sm"
-                          disabled
-                        >
-                          <GitCommitHorizontal className="h-4 w-4 mr-1.5" />
-                          Create Version
-                        </Button>
-                      </div>
+                      <VersionPanel onCommitClick={() => setCommitDialogOpen(true)} />
                     </TabsContent>
 
                     {/* Annotations Tab */}
@@ -389,6 +341,15 @@ export default function Home() {
             </>
           )}
         </div>
+
+        {/* Commit Dialog */}
+        {hasDocument && (
+          <CommitDialog
+            open={commitDialogOpen}
+            onOpenChange={setCommitDialogOpen}
+            instance={pspdfkitInstanceRef.current}
+          />
+        )}
       </div>
     </TooltipProvider>
   );

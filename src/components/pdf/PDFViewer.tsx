@@ -36,7 +36,9 @@ export interface PSPDFKitInstanceType {
   addEventListener: (event: string, callback: (...args: unknown[]) => void) => void;
   removeEventListener: (event: string, callback: (...args: unknown[]) => void) => void;
   exportPDF: () => Promise<ArrayBuffer>;
+  exportInstantJSON: () => Promise<{ format: string; annotations: unknown[] }>;
   getAnnotations: (pageIndex: number) => Promise<PSPDFKitAnnotationList>;
+  textLinesForPageIndex: (pageIndex: number) => Promise<PSPDFKitTextLine[]>;
   delete: (annotationOrId: unknown) => Promise<void>;
   dispose: () => void;
   contentDocument: Document;
@@ -55,6 +57,12 @@ export interface PSPDFKitAnnotation {
   boundingBox: { left: number; top: number; width: number; height: number };
   customData?: Record<string, unknown>;
   [key: string]: unknown;
+}
+
+export interface PSPDFKitTextLine {
+  contents: string;
+  pageIndex: number;
+  boundingBox: { left: number; top: number; width: number; height: number };
 }
 
 interface ViewState {
