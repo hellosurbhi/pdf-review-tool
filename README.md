@@ -13,10 +13,10 @@
 ### Upload & Viewing
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Drag & drop PDF upload | 🔄 In Progress | Upload PDFs via drag-drop or file picker |
-| PDF rendering | 🔄 In Progress | High-fidelity rendering via PSPDFKit SDK |
-| Page thumbnails | 🔄 In Progress | Visual navigation in left sidebar |
-| Zoom & pan controls | 🔄 In Progress | Standard PDF viewer controls |
+| Drag & drop PDF upload | ✅ Implemented | Upload PDFs via drag-drop or file picker |
+| PDF rendering | ✅ Implemented | High-fidelity rendering via PSPDFKit SDK |
+| Page thumbnails | ✅ Implemented | Visual navigation in left sidebar |
+| Zoom & pan controls | ✅ Implemented | Standard PDF viewer controls (via PSPDFKit) |
 | Responsive layout | ✅ Implemented | Collapsible sidebars, mobile-friendly |
 
 ### Editing & Annotations

@@ -10,7 +10,7 @@
  * - Right sidebar (280px): Version history
  */
 
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   FileText,
   Upload,
@@ -30,15 +30,44 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  PDFUploader,
+  PDFViewer,
+  PageThumbnails,
+  goToPage,
+  type PSPDFKitInstanceType,
+} from '@/components/pdf';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useVersionStore } from '@/store/useVersionStore';
 
 export default function Home() {
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
+  const pspdfkitInstanceRef = useRef<PSPDFKitInstanceType | null>(null);
 
   const { currentDocument } = useDocumentStore();
   const { versions, currentVersionId } = useVersionStore();
+
+  /**
+   * Handle page selection from thumbnails
+   */
+  const handlePageSelect = useCallback((pageIndex: number) => {
+    if (pspdfkitInstanceRef.current) {
+      goToPage(pspdfkitInstanceRef.current, pageIndex);
+    }
+    setCurrentPage(pageIndex);
+  }, []);
+
+  /**
+   * Store PSPDFKit instance reference when ready
+   */
+  const handleInstanceReady = useCallback((instance: PSPDFKitInstanceType) => {
+    pspdfkitInstanceRef.current = instance;
+  }, []);
 
   return (
     <TooltipProvider>
@@ -61,7 +90,11 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="icon">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setUploadDialogOpen(true)}
+                >
                   <Upload className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
@@ -117,19 +150,19 @@ export default function Home() {
                   <TooltipContent>Close sidebar</TooltipContent>
                 </Tooltip>
               </div>
-              <ScrollArea className="flex-1">
-                <div className="p-3 space-y-2">
-                  {!currentDocument ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      No document loaded
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      Page thumbnails will appear here
-                    </p>
-                  )}
+              {currentDocument && totalPages > 0 ? (
+                <PageThumbnails
+                  totalPages={totalPages}
+                  currentPage={currentPage}
+                  onPageSelect={handlePageSelect}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center p-4">
+                  <p className="text-sm text-muted-foreground text-center">
+                    {currentDocument ? 'Loading pages...' : 'No document loaded'}
+                  </p>
                 </div>
-              </ScrollArea>
+              )}
             </div>
           </aside>
 
@@ -160,17 +193,22 @@ export default function Home() {
                   <p className="text-muted-foreground mb-6">
                     Upload a PDF document to start reviewing, annotating, and tracking versions.
                   </p>
-                  <Button>
+                  <Button onClick={() => setUploadDialogOpen(true)}>
                     <Upload className="h-4 w-4 mr-2" />
                     Upload PDF
                   </Button>
                 </div>
               </div>
+            ) : currentVersionId ? (
+              <PDFViewer
+                versionId={currentVersionId}
+                onPageChange={setCurrentPage}
+                onTotalPagesChange={setTotalPages}
+                onInstanceReady={handleInstanceReady}
+              />
             ) : (
-              <div className="flex-1 flex items-center justify-center bg-muted/20">
-                <p className="text-muted-foreground">
-                  PDF Viewer will be rendered here (PSPDFKit)
-                </p>
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-muted-foreground">Loading document...</p>
               </div>
             )}
           </main>
@@ -262,6 +300,12 @@ export default function Home() {
           </aside>
         </div>
       </div>
+
+      {/* Upload Dialog */}
+      <PDFUploader
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+      />
     </TooltipProvider>
   );
 }
