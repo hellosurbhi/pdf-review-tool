@@ -155,6 +155,35 @@ sequenceDiagram
     UI->>UI: Render per-page diffs + annotation changes + summary panel
 ```
 
+## Data Flow - Export Annotated PDF
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI as ExportButton
+    participant Engine as pdf-utils.ts
+    participant PdfLib as pdf-lib
+    participant DB as Dexie (IndexedDB)
+
+    User->>UI: Click Export
+    UI->>Engine: exportAnnotatedPDFFromDB(docId, name, versionId)
+    Engine->>DB: versionOps.getPdfData(currentVersionId)
+    DB-->>Engine: ArrayBuffer (current PDF)
+    Engine->>DB: versionOps.getByDocumentId(docId)
+    DB-->>Engine: All versions (metadata)
+    Engine->>PdfLib: PDFDocument.load(pdfData)
+    PdfLib-->>Engine: pdfDoc
+    Engine->>PdfLib: embedFont(Helvetica, HelveticaBold)
+    Engine->>PdfLib: insertPage(0) — cover page
+    Engine->>Engine: drawCoverPage(table with versions)
+    Engine->>Engine: drawCallouts(affected pages)
+    Engine->>PdfLib: pdfDoc.save()
+    PdfLib-->>Engine: Uint8Array
+    Engine->>Engine: Blob → URL.createObjectURL → download
+    Engine-->>UI: Success
+    UI->>User: Toast "Annotated PDF exported"
+```
+
 ## Component Hierarchy
 
 ```mermaid

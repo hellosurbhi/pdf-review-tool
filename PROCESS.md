@@ -482,8 +482,83 @@ pdf-review-tool/
 
 ### What's Next (Phase 5)
 
-- [ ] Export PDF with/without annotations
+- [x] Export annotated PDF with changelog and inline callouts
 - [ ] Flattened export (annotations burned into PDF)
-- [ ] Annotated changelog export
+
+---
+
+## Phase 5: Export Annotated PDF
+
+**Date:** 2026-02-06
+
+### What Was Built
+
+1. **Export Engine** (`src/lib/pdf-utils.ts`)
+   - `exportAnnotatedPDF()`: Main export function using pdf-lib
+   - Step 1: Loads current PDF via `PDFDocument.load()`
+   - Step 2: Inserts a change log cover page at index 0 (letter size 612x792):
+     - Title "Document Change Log" in Helvetica-Bold 24pt, centered
+     - Subtitle with document name + export date in 12pt
+     - Horizontal line separator
+     - Table with columns: Version | Date | Message | Changes
+     - Alternating row backgrounds (light gray / white)
+     - Dark header row with white text
+     - Commit messages truncated to 80 chars
+   - Step 3: Adds inline callout boxes on affected pages:
+     - Light blue background rectangle (rgb 0.9, 0.95, 1.0)
+     - Dark blue border (rgb 0.3, 0.45, 0.7)
+     - 7pt text like "V2-#1: Highlight added"
+     - 150w x 20h callout boxes, stacked vertically from top-right margin
+   - Step 4: Generates PDF bytes, creates Blob, triggers download via hidden anchor
+   - `exportAnnotatedPDFFromDB()`: Wrapper that loads version data from IndexedDB
+   - `extractChangesByPage()`: Parses annotation JSON to detect added/deleted by page
+   - Fonts embedded once at document level for reuse across pages
+
+2. **ExportButton Component** (`src/components/export/ExportButton.tsx`)
+   - Header button with download icon, tooltip
+   - Loading spinner during PDF generation
+   - Disabled when only V1 exists (need 2+ versions for meaningful export)
+   - Tooltip explains: "Need at least 2 versions to export" when disabled
+   - Success/error toasts on completion
+
+3. **Page Integration** (`src/app/page.tsx`)
+   - Replaced disabled export icon button with live ExportButton component
+   - Passes documentId, documentName, currentVersionId, versionCount props
+
+### Key Technical Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **pdf-lib over PSPDFKit export** | pdf-lib is pure JS, enables inserting cover pages and drawing custom graphics; PSPDFKit export only saves current state |
+| **Cover page at index 0** | Change log is the first thing a reviewer sees when opening the PDF |
+| **Callout offset by 1** | Cover page insertion shifts all original pages by +1; callout page indices must account for this |
+| **Fonts embedded at doc level** | `embedFont()` is async and should only be called once per font; passed to draw functions as params |
+| **Metadata-only version loading** | `exportAnnotatedPDFFromDB` sets `pdfData: new ArrayBuffer(0)` for changelog versions — only the current version's PDF blob is loaded |
+| **Uint8Array.buffer cast** | pdf-lib's `save()` returns `Uint8Array`; TypeScript strict mode requires explicit `ArrayBuffer` cast for `Blob` constructor |
+
+### Challenges Encountered
+
+1. **PDFDocument Private Constructor**
+   - `InstanceType<typeof PDFDocument>` fails because pdf-lib's constructor is private
+   - Fixed by using `PDFDocument` type directly (imported as value, works for function params)
+
+2. **Uint8Array / BlobPart Incompatibility**
+   - TypeScript strict mode: `Uint8Array<ArrayBufferLike>` not assignable to `BlobPart`
+   - Fixed with `pdfBytes.buffer as ArrayBuffer`
+
+### Files Created/Modified
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/lib/pdf-utils.ts` | Created | Export engine with cover page + inline callouts |
+| `src/components/export/ExportButton.tsx` | Created | Header export button with loading state |
+| `src/components/export/index.ts` | Created | Component re-exports |
+| `src/app/page.tsx` | Modified | Wired ExportButton, removed disabled placeholder |
+
+### What's Next (Phase 6)
+
+- [ ] Flattened export (annotations burned into PDF)
+- [ ] Settings panel / preferences
+- [ ] Multi-document support
 
 ---

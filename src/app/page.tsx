@@ -19,7 +19,6 @@ import {
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
-  Download,
   GitCommitHorizontal,
   GitCompareArrows,
   Clock,
@@ -46,6 +45,7 @@ import {
   type PSPDFKitInstanceType,
 } from '@/components/pdf';
 import { CommitDialog, VersionPanel, VersionDiff } from '@/components/version';
+import { ExportButton } from '@/components/export';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useVersionStore } from '@/store/useVersionStore';
 import { useUnsavedChangeCount, useAnnotations } from '@/store/useAnnotationStore';
@@ -171,14 +171,14 @@ export default function Home() {
                       </TooltipContent>
                     </Tooltip>
 
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-8 w-8" disabled>
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Export PDF</TooltipContent>
-                    </Tooltip>
+                    {currentDocument && currentVersionId && (
+                      <ExportButton
+                        documentId={currentDocument.id}
+                        documentName={currentDocument.name}
+                        currentVersionId={currentVersionId}
+                        versionCount={versions.length}
+                      />
+                    )}
                   </>
                 )}
 

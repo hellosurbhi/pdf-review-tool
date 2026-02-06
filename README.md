@@ -62,9 +62,10 @@
 ### Export
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Export PDF | 📋 Planned | Download with/without annotations |
+| Export Annotated PDF | ✅ Implemented | Download PDF with changelog cover page and inline callouts |
+| Change log cover page | ✅ Implemented | Version history table with dates, messages, change counts |
+| Inline callouts | ✅ Implemented | Light blue callout boxes on affected pages showing changes |
 | Flattened export | 📋 Planned | Burn annotations into PDF |
-| Annotated changelog | 📋 Planned | PDF with version history |
 
 ### Backend / Storage
 | Feature | Status | Description |
