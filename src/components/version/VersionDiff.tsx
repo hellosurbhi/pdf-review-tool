@@ -5,13 +5,14 @@
  *
  * Full diff view with:
  * - Diff controls: base/compare version selectors, compare/exit buttons
+ * - Side-by-side PDF rendering (base vs compare)
  * - Per-page text diff panel with color-coded additions/deletions
  * - Annotation diff summary
  * - Diff summary panel with stats and page navigation
  * - Color legend with visibility toggles
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   GitCompareArrows,
   X,
@@ -38,7 +39,159 @@ import {
 } from '@/components/ui/select';
 import { useVersionStore } from '@/store/useVersionStore';
 import { computeFullDiff } from '@/lib/diff-utils';
+import { versionOps } from '@/lib/db';
 import type { DiffResult, TextDiff, AnnotationChange } from '@/types';
+
+/**
+ * PSPDFKit module type for dynamic import
+ */
+interface PSPDFKitModule {
+  load: (config: Record<string, unknown>) => Promise<unknown>;
+  unload: (container: HTMLElement) => Promise<void>;
+}
+
+/**
+ * Side-by-side PDF viewer for visual diff.
+ * Loads two separate PSPDFKit instances for base and compare versions.
+ */
+function SideBySidePDFView({
+  baseVersionId,
+  compareVersionId,
+  baseLabel,
+  compareLabel,
+}: {
+  baseVersionId: string;
+  compareVersionId: string;
+  baseLabel: string;
+  compareLabel: string;
+}) {
+  const leftRef = useRef<HTMLDivElement>(null);
+  const rightRef = useRef<HTMLDivElement>(null);
+  const pspdfkitRef = useRef<PSPDFKitModule | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadBoth = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const [basePdf, comparePdf] = await Promise.all([
+          versionOps.getPdfData(baseVersionId),
+          versionOps.getPdfData(compareVersionId),
+        ]);
+
+        if (!basePdf || !comparePdf) {
+          throw new Error('PDF data not found for one or both versions');
+        }
+        if (!isMounted) return;
+
+        const pspdfkitModule = await import('pspdfkit');
+        const PSPDFKit = pspdfkitModule.default as unknown as PSPDFKitModule;
+        pspdfkitRef.current = PSPDFKit;
+
+        if (!isMounted) return;
+
+        const baseConfig: Record<string, unknown> = {
+          baseUrl: `${window.location.origin}/`,
+          licenseKey: process.env.NEXT_PUBLIC_PSPDFKIT_LICENSE_KEY,
+          disableTextSelection: false,
+        };
+
+        // Load base (left)
+        if (leftRef.current) {
+          try { await PSPDFKit.unload(leftRef.current); } catch { /* ignore */ }
+          await PSPDFKit.load({
+            ...baseConfig,
+            container: leftRef.current,
+            document: basePdf,
+          });
+        }
+
+        if (!isMounted) return;
+
+        // Load compare (right)
+        if (rightRef.current) {
+          try { await PSPDFKit.unload(rightRef.current); } catch { /* ignore */ }
+          await PSPDFKit.load({
+            ...baseConfig,
+            container: rightRef.current,
+            document: comparePdf,
+          });
+        }
+
+        if (isMounted) setLoading(false);
+      } catch (err) {
+        console.error('Failed to load side-by-side PDFs:', err);
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load PDFs');
+          setLoading(false);
+        }
+      }
+    };
+
+    loadBoth();
+
+    return () => {
+      isMounted = false;
+      const PSPDFKit = pspdfkitRef.current;
+      if (PSPDFKit) {
+        if (leftRef.current) {
+          try { PSPDFKit.unload(leftRef.current); } catch { /* ignore */ }
+        }
+        if (rightRef.current) {
+          try { PSPDFKit.unload(rightRef.current); } catch { /* ignore */ }
+        }
+      }
+    };
+  }, [baseVersionId, compareVersionId]);
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64 text-sm text-destructive">
+        {error}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative border rounded-lg overflow-hidden">
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <span className="text-xs text-muted-foreground">Loading visual diff...</span>
+          </div>
+        </div>
+      )}
+      <div className="flex h-[500px]">
+        {/* Base version (left) */}
+        <div className="flex-1 flex flex-col border-r min-w-0">
+          <div className="px-3 py-1.5 bg-muted/50 border-b text-xs font-medium flex items-center gap-1.5">
+            <Badge variant="secondary" className="font-mono text-[10px] px-1.5 py-0">
+              {baseLabel}
+            </Badge>
+            <span className="text-muted-foreground">Base</span>
+          </div>
+          <div ref={leftRef} className="flex-1 min-h-0" />
+        </div>
+        {/* Compare version (right) */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="px-3 py-1.5 bg-muted/50 border-b text-xs font-medium flex items-center gap-1.5">
+            <Badge variant="secondary" className="font-mono text-[10px] px-1.5 py-0">
+              {compareLabel}
+            </Badge>
+            <span className="text-muted-foreground">Compare</span>
+          </div>
+          <div ref={rightRef} className="flex-1 min-h-0" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface VersionDiffProps {
   onExit: () => void;
@@ -323,7 +476,15 @@ export function VersionDiff({ onExit }: VersionDiffProps) {
 
           {diffResult && !isComputing && (
             <ScrollArea className="flex-1">
-              <div className="p-4 space-y-4 max-w-3xl mx-auto">
+              <div className="p-4 space-y-4 max-w-5xl mx-auto">
+                {/* Side-by-side visual PDF diff */}
+                <SideBySidePDFView
+                  baseVersionId={baseVersionId}
+                  compareVersionId={compareVersionId}
+                  baseLabel={`V${versions.find((v) => v.id === baseVersionId)?.versionNumber ?? '?'}`}
+                  compareLabel={`V${versions.find((v) => v.id === compareVersionId)?.versionNumber ?? '?'}`}
+                />
+
                 {/* Text Diffs */}
                 {filteredTextDiffs.length > 0 && (
                   <div className="space-y-3">

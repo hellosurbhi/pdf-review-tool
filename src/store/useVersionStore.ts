@@ -6,10 +6,10 @@
  */
 
 import { create } from 'zustand';
-import type { Version, DiffResult, VersionState } from '@/types';
+import type { VersionMetadata, DiffResult, VersionState } from '@/types';
 
 const initialState = {
-  versions: [] as Version[],
+  versions: [] as VersionMetadata[],
   currentVersionId: null as string | null,
   compareVersionId: null as string | null,
   diffResult: null as DiffResult | null,

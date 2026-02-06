@@ -36,11 +36,9 @@ export interface PSPDFKitInstanceType {
   addEventListener: (event: string, callback: (...args: unknown[]) => void) => void;
   removeEventListener: (event: string, callback: (...args: unknown[]) => void) => void;
   exportPDF: () => Promise<ArrayBuffer>;
-  exportInstantJSON: () => Promise<{ format: string; annotations: unknown[] }>;
   getAnnotations: (pageIndex: number) => Promise<PSPDFKitAnnotationList>;
   textLinesForPageIndex: (pageIndex: number) => Promise<PSPDFKitTextLine[]>;
   delete: (annotationOrId: unknown) => Promise<void>;
-  dispose: () => void;
   contentDocument: Document;
   setToolbarItems: (items: ToolbarItem[]) => void;
 }
@@ -141,6 +139,7 @@ export function PDFViewer({
 }: PDFViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<PSPDFKitInstanceType | null>(null);
+  const pspdfkitRef = useRef<PSPDFKitModule | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -308,6 +307,7 @@ export function PDFViewer({
         // Dynamically import PSPDFKit
         const pspdfkitModule = await import('pspdfkit');
         const PSPDFKit = pspdfkitModule.default as unknown as PSPDFKitModule;
+        pspdfkitRef.current = PSPDFKit;
 
         if (!isMounted) return;
 
@@ -321,36 +321,52 @@ export function PDFViewer({
           instanceRef.current = null;
         }
 
-        // Load PSPDFKit with full configuration
-        const instance = await PSPDFKit.load({
+        // Load PSPDFKit — try with custom toolbar, fall back to defaults
+        const baseConfig: Record<string, unknown> = {
           container,
           document: pdfData,
           baseUrl: `${window.location.origin}/`,
           licenseKey: process.env.NEXT_PUBLIC_PSPDFKIT_LICENSE_KEY,
           disableTextSelection: false,
-          toolbarItems: [
-            { type: 'sidebar-thumbnails' },
-            { type: 'sidebar-bookmarks' },
-            { type: 'pager' },
-            { type: 'zoom-out' },
-            { type: 'zoom-in' },
-            { type: 'zoom-mode' },
-            { type: 'spacer' },
-            { type: 'search' },
-            { type: 'spacer' },
-            { type: 'annotate' },
-            { type: 'ink' },
-            { type: 'highlighter' },
-            { type: 'text-highlighter' },
-            { type: 'note' },
-            { type: 'text' },
-            { type: 'spacer' },
-            { type: 'print' },
-          ],
-        });
+        };
+
+        const customToolbarItems: ToolbarItem[] = [
+          { type: 'sidebar-thumbnails' },
+          { type: 'sidebar-bookmarks' },
+          { type: 'pager' },
+          { type: 'zoom-out' },
+          { type: 'zoom-in' },
+          { type: 'zoom-mode' },
+          { type: 'spacer' },
+          { type: 'search' },
+          { type: 'spacer' },
+          { type: 'ink' },
+          { type: 'highlighter' },
+          { type: 'text-highlighter' },
+          { type: 'note' },
+          { type: 'text' },
+          { type: 'spacer' },
+          { type: 'print' },
+        ];
+
+        let instance: PSPDFKitInstanceType;
+        try {
+          instance = await PSPDFKit.load({
+            ...baseConfig,
+            toolbarItems: customToolbarItems,
+          });
+        } catch {
+          // Custom toolbar failed — fall back to default toolbar
+          if (container) {
+            try { await PSPDFKit.unload(container); } catch { /* ignore */ }
+          }
+          instance = await PSPDFKit.load(baseConfig);
+        }
 
         if (!isMounted) {
-          instance.dispose();
+          if (container) {
+            try { await PSPDFKit.unload(container); } catch { /* ignore */ }
+          }
           return;
         }
 
@@ -396,8 +412,10 @@ export function PDFViewer({
         instance.removeEventListener('annotations.create', handleAnnotationCreate);
         instance.removeEventListener('annotations.update', handleAnnotationUpdate);
         instance.removeEventListener('annotations.delete', handleAnnotationDelete);
-        instance.dispose();
         instanceRef.current = null;
+      }
+      if (containerRef.current && pspdfkitRef.current) {
+        try { pspdfkitRef.current.unload(containerRef.current); } catch { /* ignore */ }
       }
     };
   }, [

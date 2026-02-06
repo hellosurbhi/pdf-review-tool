@@ -59,6 +59,8 @@ import { ExportButton } from '@/components/export';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useVersionStore } from '@/store/useVersionStore';
 import { useUnsavedChangeCount, useAnnotations } from '@/store/useAnnotationStore';
+import { versionOps } from '@/lib/db';
+import type { PageText } from '@/types';
 
 export default function Home() {
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
@@ -88,11 +90,46 @@ export default function Home() {
   }, []);
 
   /**
-   * Store PSPDFKit instance reference when ready
+   * Store PSPDFKit instance reference when ready.
+   * Also backfill textContent for versions that have empty text (e.g., V1 from initial upload).
    */
-  const handleInstanceReady = useCallback((instance: PSPDFKitInstanceType) => {
-    pspdfkitInstanceRef.current = instance;
-  }, []);
+  const handleInstanceReady = useCallback(
+    async (instance: PSPDFKitInstanceType) => {
+      pspdfkitInstanceRef.current = instance;
+
+      // Backfill textContent if the current version has none
+      const versionId = useVersionStore.getState().currentVersionId;
+      const versionMeta = useVersionStore.getState().versions.find((v) => v.id === versionId);
+      if (versionId && versionMeta && !versionMeta.textContent) {
+        try {
+          const pages: PageText[] = [];
+          for (let i = 0; i < instance.totalPageCount; i++) {
+            try {
+              const textLines = await instance.textLinesForPageIndex(i);
+              pages.push({ pageIndex: i, text: textLines.map((l) => l.contents).join('\n') });
+            } catch {
+              pages.push({ pageIndex: i, text: '' });
+            }
+          }
+          const textContent = JSON.stringify(pages);
+          // Update IndexedDB
+          const dbVersion = await versionOps.getById(versionId);
+          if (dbVersion && !dbVersion.textContent) {
+            await versionOps.update(versionId, { textContent });
+          }
+          // Update Zustand metadata
+          useVersionStore.getState().setVersions(
+            useVersionStore.getState().versions.map((v) =>
+              v.id === versionId ? { ...v, textContent } : v
+            )
+          );
+        } catch {
+          // Non-critical — diff will just show empty for this version
+        }
+      }
+    },
+    []
+  );
 
   const hasDocument = !!currentDocument;
   const canDiff = versions.length >= 2;

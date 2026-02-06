@@ -8,7 +8,7 @@
 
 import { PDFDocument, StandardFonts, rgb, type PDFPage, type PDFFont } from 'pdf-lib';
 import { versionOps } from '@/lib/db';
-import type { Version } from '@/types';
+import type { Version, VersionMetadata } from '@/types';
 
 /** Page dimensions for letter size */
 const LETTER_WIDTH = 612;
@@ -30,8 +30,8 @@ const CALLOUT_GAP = 4;
  * Returns a map of pageIndex -> list of change descriptions.
  */
 function extractChangesByPage(
-  version: Version,
-  prevVersion: Version | null
+  version: VersionMetadata,
+  prevVersion: VersionMetadata | null
 ): Map<number, string[]> {
   const changes = new Map<number, string[]>();
 
@@ -101,7 +101,7 @@ function extractChangesByPage(
 /**
  * Count total annotation changes for a version (vs. previous version).
  */
-function countChanges(version: Version, prevVersion: Version | null): number {
+function countChanges(version: VersionMetadata, prevVersion: VersionMetadata | null): number {
   const changes = extractChangesByPage(version, prevVersion);
   let total = 0;
   for (const descs of changes.values()) {
@@ -138,7 +138,7 @@ function formatDate(date: Date): string {
 function drawCoverPage(
   page: PDFPage,
   documentName: string,
-  versions: Version[],
+  versions: VersionMetadata[],
   helvetica: PDFFont,
   helveticaBold: PDFFont
 ) {
@@ -247,7 +247,7 @@ function drawCoverPage(
  */
 function drawCallouts(
   pdfDoc: PDFDocument,
-  versions: Version[],
+  versions: VersionMetadata[],
   helvetica: PDFFont
 ) {
   const sortedVersions = [...versions].sort((a, b) => a.versionNumber - b.versionNumber);
@@ -325,7 +325,7 @@ function drawCallouts(
 export async function exportAnnotatedPDF(
   currentPdfData: ArrayBuffer,
   documentName: string,
-  versions: Version[]
+  versions: VersionMetadata[]
 ): Promise<void> {
   // Step 1: Load the current PDF
   const pdfDoc = await PDFDocument.load(currentPdfData);
@@ -366,12 +366,12 @@ export async function exportAnnotatedPDFFromDB(
     throw new Error('Current PDF data not found');
   }
 
-  // Load all versions (metadata only — pdfData not needed for changelog)
+  // Load all versions — strip pdfData, only metadata needed for changelog
   const dbVersions = await versionOps.getByDocumentId(documentId);
-  const versions: Version[] = dbVersions.map((v) => ({
-    ...v,
-    pdfData: new ArrayBuffer(0),
-  }));
+  const versions: VersionMetadata[] = dbVersions.map(({ pdfData: _pdf, ...meta }) => {
+    void _pdf;
+    return meta;
+  });
 
   await exportAnnotatedPDF(pdfData, documentName, versions);
 }

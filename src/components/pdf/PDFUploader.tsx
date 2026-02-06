@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useVersionStore } from '@/store/useVersionStore';
 import { documentOps, versionOps, generateId } from '@/lib/db';
-import type { PDFDocument, Version } from '@/types';
+import type { PDFDocument, Version, VersionMetadata } from '@/types';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ACCEPTED_TYPES = ['application/pdf'];
@@ -84,9 +84,13 @@ export function PDFUploader() {
         await documentOps.create(document);
         await versionOps.create(version);
 
+        // Store only metadata (no pdfData) in Zustand
+        const { pdfData: _pdfData, ...metadata }: Version = version;
+        void _pdfData;
+
         addDocument(document);
-        setVersions([version]);
-        addVersion(version);
+        setVersions([metadata]);
+        addVersion(metadata);
 
         toast.success('Document uploaded — Version 1 created');
       } catch (err) {

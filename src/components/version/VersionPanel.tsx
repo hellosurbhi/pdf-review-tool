@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { useVersionStore } from '@/store/useVersionStore';
 import { useAnnotationStore } from '@/store/useAnnotationStore';
-import type { Version } from '@/types';
+import type { VersionMetadata } from '@/types';
 
 interface VersionPanelProps {
   onCommitClick: () => void;
@@ -71,14 +71,14 @@ export function VersionPanel({ onCommitClick }: VersionPanelProps) {
   const { versions, currentVersionId, setCurrentVersion } = useVersionStore();
   const { pendingChanges, clearChanges } = useAnnotationStore();
 
-  const [switchTarget, setSwitchTarget] = useState<Version | null>(null);
+  const [switchTarget, setSwitchTarget] = useState<VersionMetadata | null>(null);
 
   const hasUnsavedChanges = pendingChanges.length > 0;
 
   /**
    * Handle version click — show warning if unsaved changes exist
    */
-  const handleVersionClick = useCallback((version: Version) => {
+  const handleVersionClick = useCallback((version: VersionMetadata) => {
     if (version.id === currentVersionId) return;
 
     if (hasUnsavedChanges) {

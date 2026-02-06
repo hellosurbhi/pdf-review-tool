@@ -206,4 +206,16 @@ export const versionOps = {
       throw error;
     }
   },
+
+  /**
+   * Update a version record (partial update)
+   */
+  async update(id: string, updates: Partial<DBVersion>): Promise<void> {
+    try {
+      await db.versions.update(id, updates);
+    } catch (error) {
+      console.error('Failed to update version:', error);
+      throw error;
+    }
+  },
 };

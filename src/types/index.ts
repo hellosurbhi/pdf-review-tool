@@ -39,6 +39,12 @@ export interface Version {
 }
 
 /**
+ * Version metadata without binary pdfData — safe for React/Zustand state.
+ * pdfData should only live in IndexedDB and be loaded on demand.
+ */
+export type VersionMetadata = Omit<Version, 'pdfData'>;
+
+/**
  * Represents an annotation on a PDF page
  */
 export interface Annotation {
@@ -162,13 +168,13 @@ export interface DocumentState extends LoadingState {
  * Version store state interface
  */
 export interface VersionState extends LoadingState {
-  versions: Version[];
+  versions: VersionMetadata[];
   currentVersionId: string | null;
   compareVersionId: string | null;
   diffResult: DiffResult | null;
   isComparing: boolean;
-  setVersions: (versions: Version[]) => void;
-  addVersion: (version: Version) => void;
+  setVersions: (versions: VersionMetadata[]) => void;
+  addVersion: (version: VersionMetadata) => void;
   setCurrentVersion: (id: string | null) => void;
   setCompareVersion: (id: string | null) => void;
   setDiffResult: (result: DiffResult | null) => void;

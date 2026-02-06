@@ -7,7 +7,7 @@
  * - Auto-generates version number from current max + 1
  * - Required message textarea for commit description
  * - Shows summary of pending annotation changes
- * - Exports PDF data + Instant JSON annotations + extracted text
+ * - Exports PDF data + annotation tracking data + extracted text
  * - Saves version to IndexedDB, clears unsaved changes, shows toast
  */
 
@@ -84,15 +84,17 @@ export function CommitDialog({ open, onOpenChange, instance }: CommitDialogProps
       // Export current PDF state (with annotations baked in)
       const pdfData = await instance.exportPDF();
 
-      // Export annotation data as Instant JSON
-      let annotationsJson = '[]';
-      try {
-        const instantJson = await instance.exportInstantJSON();
-        annotationsJson = JSON.stringify(instantJson);
-      } catch {
-        // Fallback: store empty if export fails
-        annotationsJson = '[]';
-      }
+      // Serialize annotation tracking data from Zustand store
+      const { annotations: currentAnnotations } = useAnnotationStore.getState();
+      const annotationsJson = JSON.stringify(
+        currentAnnotations.map((a) => ({
+          id: a.pspdfkitId,
+          type: a.type,
+          pageIndex: a.pageIndex,
+          contents: a.contents,
+          color: a.color,
+        }))
+      );
 
       // Extract text content from every page
       const pageTexts = await extractText(instance);
@@ -111,7 +113,7 @@ export function CommitDialog({ open, onOpenChange, instance }: CommitDialogProps
         createdAt: new Date(),
       };
 
-      // Save to IndexedDB
+      // Save full version (with pdfData) to IndexedDB
       await versionOps.create({
         id: version.id,
         documentId: version.documentId,
@@ -123,8 +125,16 @@ export function CommitDialog({ open, onOpenChange, instance }: CommitDialogProps
         createdAt: version.createdAt,
       });
 
-      // Update Zustand store
-      addVersion(version);
+      // Store only metadata (no pdfData) in Zustand
+      addVersion({
+        id: version.id,
+        documentId: version.documentId,
+        versionNumber: version.versionNumber,
+        message: version.message,
+        annotations: version.annotations,
+        textContent: version.textContent,
+        createdAt: version.createdAt,
+      });
 
       // Clear pending changes
       clearChanges();
