@@ -2,17 +2,20 @@
 
 This document describes the system architecture, data flow, and design decisions for the PDF Review & Versioning Tool.
 
-## High-Level Architecture
+## 1. High-Level Architecture
 
 ```mermaid
 flowchart TB
     subgraph Browser["Browser Client"]
         subgraph UI["UI Layer (React)"]
             Header["Header Bar"]
+            AnnotationToolbar["Annotation Toolbar"]
             LeftSidebar["Left Sidebar<br/>(Page Thumbnails)"]
             Viewer["PDF Viewer<br/>(PSPDFKit)"]
-            RightSidebar["Right Sidebar<br/>(Version History)"]
+            RightSidebar["Right Sidebar<br/>(Versions + Annotations)"]
+            DiffView["Diff View<br/>(VersionDiff)"]
             Dialogs["Dialogs & Modals"]
+            ErrorBoundary["Error Boundary"]
         end
 
         subgraph State["State Layer (Zustand)"]
@@ -34,6 +37,15 @@ flowchart TB
         end
     end
 
+    subgraph Server["Next.js Server (Optional)"]
+        subgraph API["Route Handlers"]
+            DocAPI["POST/GET /api/documents"]
+            VerAPI["POST/GET /api/documents/:id/versions"]
+            DiffAPI["GET /api/documents/:id/diff"]
+        end
+        InMemStore["In-Memory Map Storage"]
+    end
+
     subgraph Storage["Local Storage"]
         IDB[("IndexedDB")]
     end
@@ -43,148 +55,68 @@ flowchart TB
     Services --> External
     DBLayer --> IDB
     PSPDFKit --> Viewer
+    API --> InMemStore
+    ErrorBoundary --> Viewer
 ```
 
-## Data Flow - Document Upload
+## 2. Data Flow — Full User Journey
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI as Upload Component
-    participant Store as useDocumentStore
+    participant Upload as PDFUploader
+    participant Store as Zustand Stores
     participant DB as Dexie (IndexedDB)
-    participant PSPDFKit
-
-    User->>UI: Drop/Select PDF file
-    UI->>UI: Validate file (type, size)
-    UI->>Store: setLoading(true)
-    UI->>DB: documentOps.create(doc)
-    DB-->>UI: Document ID
-    UI->>DB: versionOps.create(v1)
-    DB-->>UI: Version ID
-    UI->>Store: setCurrentDocument(doc)
-    UI->>Store: addVersion(v1)
-    Store-->>PSPDFKit: Load PDF data
-    PSPDFKit-->>UI: Render PDF
-    UI->>Store: setLoading(false)
-    UI->>User: Show success toast
-```
-
-## Data Flow - Version Creation
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI as Commit Dialog
-    participant Store as useVersionStore
-    participant PSPDFKit
-    participant DB as Dexie (IndexedDB)
-
-    User->>UI: Click "Create Version"
-    UI->>UI: Open commit dialog
-    User->>UI: Enter commit message
-    User->>UI: Confirm
-    UI->>PSPDFKit: exportPDF()
-    PSPDFKit-->>UI: ArrayBuffer (PDF data)
-    UI->>PSPDFKit: exportInstantJSON()
-    PSPDFKit-->>UI: Annotation JSON
-    UI->>PSPDFKit: textLinesForPageIndex(0..N)
-    PSPDFKit-->>UI: Text per page
-    UI->>DB: versionOps.create(version)
-    DB-->>UI: Version ID
-    UI->>Store: addVersion(version)
-    UI->>Store: clearChanges()
-    UI->>User: Show success toast
-```
-
-## Data Flow - Version Switching
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI as Version Panel
-    participant Store as useVersionStore
-    participant AnnStore as useAnnotationStore
+    participant PSPDFKit as PSPDFKit SDK
     participant Viewer as PDFViewer
-    participant DB as Dexie (IndexedDB)
+    participant Toolbar as AnnotationToolbar
+    participant Commit as CommitDialog
+    participant Diff as VersionDiff
+    participant Export as ExportButton
 
-    User->>UI: Click version card
-    alt Has unsaved changes
-        UI->>UI: Show warning dialog
-        User->>UI: Confirm discard
-        UI->>AnnStore: clearChanges()
-    end
-    UI->>Store: setCurrentVersion(id)
-    Store-->>Viewer: versionId prop changes
-    Viewer->>DB: versionOps.getPdfData(id)
+    Note over User,Export: Upload Flow
+    User->>Upload: Drop/Select PDF file
+    Upload->>Upload: Validate file (type, size)
+    Upload->>DB: documentOps.create(doc)
+    Upload->>DB: versionOps.create(v1)
+    Upload->>Store: setCurrentDocument + addVersion
+
+    Note over User,Export: Viewing Flow
+    Store-->>Viewer: versionId prop
+    Viewer->>DB: versionOps.getPdfData(versionId)
     DB-->>Viewer: ArrayBuffer
-    Viewer->>Viewer: Reload PSPDFKit instance
-    Viewer->>AnnStore: syncAnnotations()
-    Viewer->>User: Show info toast
+    Viewer->>PSPDFKit: PSPDFKit.load(config)
+    PSPDFKit-->>User: Render PDF
+
+    Note over User,Export: Annotation Flow
+    User->>Toolbar: Select tool (highlight, note, text, etc.)
+    Toolbar->>PSPDFKit: Set interaction mode
+    User->>PSPDFKit: Create/edit annotation
+    PSPDFKit->>Viewer: annotations.create event
+    Viewer->>Store: addAnnotation + addChange
+
+    Note over User,Export: Commit Flow
+    User->>Commit: Open dialog (Ctrl+S)
+    User->>Commit: Enter message, click Commit
+    Commit->>PSPDFKit: exportPDF() + exportInstantJSON()
+    Commit->>PSPDFKit: textLinesForPageIndex(0..N)
+    Commit->>DB: versionOps.create(version)
+    Commit->>Store: addVersion + clearChanges
+
+    Note over User,Export: Diff Flow
+    User->>Diff: Select base + compare versions
+    Diff->>DB: Load textContent + annotations for both
+    Diff->>Diff: diff_main() per page + compare annotation IDs
+    Diff-->>User: Color-coded text diffs + annotation changes
+
+    Note over User,Export: Export Flow
+    User->>Export: Click Export (Ctrl+E)
+    Export->>DB: Load current PDF + all version metadata
+    Export->>Export: Insert cover page + draw callouts
+    Export-->>User: Download annotated PDF
 ```
 
-## Data Flow - Version Comparison
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI as VersionDiff
-    participant DiffUtils as diff-utils.ts
-    participant DMP as diff-match-patch
-    participant DB as Dexie (IndexedDB)
-
-    User->>UI: Select base + compare versions
-    User->>UI: Click "Compare"
-    UI->>DiffUtils: computeFullDiff(baseId, compareId)
-    par Text Diff
-        DiffUtils->>DB: versionOps.getById(baseId)
-        DB-->>DiffUtils: baseVersion.textContent
-        DiffUtils->>DB: versionOps.getById(compareId)
-        DB-->>DiffUtils: compareVersion.textContent
-        loop Each page
-            DiffUtils->>DMP: diff_main(oldText, newText)
-            DMP-->>DiffUtils: diffs array
-            DiffUtils->>DMP: diff_cleanupSemantic(diffs)
-        end
-    and Annotation Diff
-        DiffUtils->>DiffUtils: parseAnnotations(base)
-        DiffUtils->>DiffUtils: parseAnnotations(compare)
-        DiffUtils->>DiffUtils: Compare by ID (added/deleted/modified)
-    end
-    DiffUtils-->>UI: DiffResult (textDiffs + annotationChanges + summary)
-    UI->>UI: Render per-page diffs + annotation changes + summary panel
-```
-
-## Data Flow - Export Annotated PDF
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI as ExportButton
-    participant Engine as pdf-utils.ts
-    participant PdfLib as pdf-lib
-    participant DB as Dexie (IndexedDB)
-
-    User->>UI: Click Export
-    UI->>Engine: exportAnnotatedPDFFromDB(docId, name, versionId)
-    Engine->>DB: versionOps.getPdfData(currentVersionId)
-    DB-->>Engine: ArrayBuffer (current PDF)
-    Engine->>DB: versionOps.getByDocumentId(docId)
-    DB-->>Engine: All versions (metadata)
-    Engine->>PdfLib: PDFDocument.load(pdfData)
-    PdfLib-->>Engine: pdfDoc
-    Engine->>PdfLib: embedFont(Helvetica, HelveticaBold)
-    Engine->>PdfLib: insertPage(0) — cover page
-    Engine->>Engine: drawCoverPage(table with versions)
-    Engine->>Engine: drawCallouts(affected pages)
-    Engine->>PdfLib: pdfDoc.save()
-    PdfLib-->>Engine: Uint8Array
-    Engine->>Engine: Blob → URL.createObjectURL → download
-    Engine-->>UI: Success
-    UI->>User: Toast "Annotated PDF exported"
-```
-
-## Component Hierarchy
+## 3. Component Hierarchy
 
 ```mermaid
 flowchart TD
@@ -194,48 +126,64 @@ flowchart TD
     subgraph Header["Header"]
         Logo["Logo + Title"]
         DocName["Document Name"]
-        Actions["Upload | Export | Settings"]
+        VersionBadge["Version Badge (V1, V2)"]
+        UnsavedBadge["Unsaved Changes Badge"]
+        Actions["Commit | Diff | Export"]
     end
 
     subgraph LeftSidebar["Left Sidebar (240px)"]
-        PagesHeader["Pages Header"]
+        PagesHeader["Pages Header + Close"]
         PageThumbnails["PageThumbnails"]
+        LoadingSkeleton["Loading Skeleton"]
     end
 
     subgraph MainContent["Main Content"]
+        ErrorBound["PDFErrorBoundary"]
         PDFViewer["PDFViewer (PSPDFKit)"]
-        EmptyState["Empty State"]
+        UploadZone["PDFUploader (Empty State)"]
     end
 
     subgraph DiffView["Diff Mode (replaces main layout)"]
         DiffControls["Diff Controls<br/>(base/compare selectors)"]
         DiffPanel["Per-Page Text Diffs"]
         DiffAnnotations["Annotation Changes"]
-        DiffSummary["Summary + Legend"]
+        DiffSummary["Summary + Legend + Navigation"]
     end
 
     subgraph RightSidebar["Right Sidebar (280px)"]
+        TabVersions["Tab: Versions"]
+        TabAnnotations["Tab: Annotations"]
         VersionPanel["VersionPanel"]
         AnnotationList["AnnotationList"]
         CreateVersionBtn["Create Version Button"]
     end
 
     subgraph Modals["Modal Components"]
-        UploadDialog["UploadDialog"]
         CommitDialog["CommitDialog"]
-        ExportDialog["ExportDialog"]
+        UnsavedWarning["Unsaved Changes Warning"]
+    end
+
+    subgraph AnnotToolbar["Annotation Toolbar"]
+        Pointer["Pointer"]
+        Highlight["Highlight + Color Picker"]
+        Note["Sticky Note"]
+        FreeText["Free Text"]
+        Redaction["Redaction"]
     end
 
     RootLayout --> HomePage
     HomePage --> Header
+    HomePage --> AnnotToolbar
     HomePage --> LeftSidebar
     HomePage --> MainContent
     HomePage --> DiffView
     HomePage --> RightSidebar
     HomePage --> Modals
+    MainContent --> ErrorBound
+    ErrorBound --> PDFViewer
 ```
 
-## State Management
+## 4. State Management
 
 ```mermaid
 flowchart LR
@@ -264,11 +212,17 @@ flowchart LR
         DB_Vers[("versions")]
     end
 
+    subgraph MockAPI["Mock API (Optional)"]
+        API_Store["In-Memory Map"]
+    end
+
     DocumentStore <--> DB_Docs
     VersionStore <--> DB_Vers
+    DB_Docs -.->|future sync| API_Store
+    DB_Vers -.->|future sync| API_Store
 ```
 
-## Database Schema
+## 5. Database / IndexedDB Schema
 
 ```mermaid
 erDiagram
@@ -285,8 +239,8 @@ erDiagram
         int versionNumber
         string message
         blob pdfData "ArrayBuffer"
-        text annotations "JSON string"
-        text textContent "Extracted text"
+        text annotations "JSON string (Instant JSON)"
+        text textContent "JSON array of PageText"
         datetime createdAt
     }
 
@@ -294,95 +248,44 @@ erDiagram
     DOCUMENTS ||--o| VERSIONS : "current version"
 ```
 
-## Type Definitions
+### Mock API In-Memory Schema
 
-```mermaid
-classDiagram
-    class PDFDocument {
-        +string id
-        +string name
-        +Date createdAt
-        +string? currentVersionId
-    }
+The mock backend mirrors the IndexedDB schema using `Map<string, StoredDocument>` and `Map<string, StoredVersion>`. Version responses exclude `pdfData` to keep payloads small.
 
-    class Version {
-        +string id
-        +string documentId
-        +int versionNumber
-        +string message
-        +ArrayBuffer pdfData
-        +string annotations
-        +string textContent
-        +Date createdAt
-    }
-
-    class Annotation {
-        +string id
-        +AnnotationType type
-        +int pageIndex
-        +AnnotationRect rect
-        +string? contents
-        +string? color
-        +Date createdAt
-    }
-
-    class DiffResult {
-        +string versionAId
-        +string versionBId
-        +TextDiff[] textDiffs
-        +AnnotationChange[] annotationChanges
-        +DiffSummary summary
-    }
-
-    class AnnotationType {
-        <<enumeration>>
-        HIGHLIGHT
-        NOTE
-        FREETEXT
-        REDACTION
-        TEXT_EDIT
-    }
-
-    PDFDocument "1" --> "*" Version
-    Version "1" --> "*" Annotation
-    DiffResult --> Version
-    Annotation --> AnnotationType
-```
-
-## Production Architecture (Scaled Up)
-
-For a production deployment with cloud sync and collaboration:
+## 6. Production Architecture (Scaled Up)
 
 ```mermaid
 flowchart TB
     subgraph Clients["Client Layer"]
-        Web["Web App<br/>(Next.js)"]
+        Web["Web App<br/>(Next.js + Vercel)"]
         Mobile["Mobile App<br/>(React Native)"]
     end
 
     subgraph CDN["CDN Layer"]
-        Static["Static Assets"]
-        PSPDFKitAssets["PSPDFKit Assets"]
+        Static["Static Assets<br/>(Vercel Edge)"]
+        PSPDFKitAssets["PSPDFKit WASM<br/>(Cloudflare R2)"]
     end
 
     subgraph API["API Layer"]
-        Gateway["API Gateway"]
-        Auth["Auth Service<br/>(JWT/OAuth)"]
+        Gateway["API Gateway<br/>(rate limiting, auth)"]
+        Auth["Auth Service<br/>(JWT + OAuth 2.0)"]
         DocService["Document Service"]
         VersionService["Version Service"]
-        SyncService["Sync Service<br/>(WebSocket)"]
+        DiffWorker["Diff Worker<br/>(diff-match-patch)"]
+        ExportWorker["Export Worker<br/>(pdf-lib)"]
+        CollabService["Collaboration Service<br/>(Y.js + WebSocket)"]
     end
 
     subgraph Storage["Storage Layer"]
-        Postgres[("PostgreSQL<br/>Metadata")]
-        S3["S3/R2<br/>PDF Storage"]
-        Redis["Redis<br/>Cache + Sessions"]
+        Postgres[("PostgreSQL<br/>Metadata + versions")]
+        S3["S3 / R2<br/>PDF blob storage"]
+        Redis["Redis<br/>Cache + sessions + pub/sub"]
     end
 
-    subgraph Processing["Processing Layer"]
-        Queue["Job Queue<br/>(Bull/BullMQ)"]
-        TextExtract["Text Extraction<br/>Worker"]
-        Thumbnail["Thumbnail<br/>Generator"]
+    subgraph Infrastructure["Infrastructure"]
+        Queue["Job Queue<br/>(BullMQ)"]
+        Monitoring["Monitoring<br/>(Prometheus + Grafana)"]
+        Logging["Logging<br/>(Sentry + structured logs)"]
     end
 
     Clients --> CDN
@@ -390,37 +293,48 @@ flowchart TB
     Gateway --> Auth
     Gateway --> DocService
     Gateway --> VersionService
-    Gateway --> SyncService
+    Gateway --> DiffWorker
+    Gateway --> ExportWorker
+    Gateway --> CollabService
     DocService --> Postgres
     DocService --> S3
     VersionService --> Postgres
     VersionService --> S3
-    SyncService --> Redis
-    DocService --> Queue
-    Queue --> TextExtract
-    Queue --> Thumbnail
+    DiffWorker --> Queue
+    ExportWorker --> Queue
+    CollabService --> Redis
+    Queue --> Monitoring
+    API --> Logging
 ```
 
-### Production Considerations
+## Key Scaling Decisions
 
-| Concern | Solution |
-|---------|----------|
-| **PDF Storage** | S3/R2 for scalable blob storage, signed URLs for secure access |
-| **Real-time Sync** | WebSocket connections via Redis pub/sub for collaboration |
-| **Text Extraction** | Background workers using pdf.js or server-side PSPDFKit |
-| **Caching** | Redis for session data, CDN for static assets |
-| **Authentication** | JWT tokens with refresh, OAuth for SSO |
-| **Rate Limiting** | API Gateway with per-user limits |
-| **Monitoring** | Prometheus + Grafana, error tracking with Sentry |
+| Concern | Current (Local-First) | Production (Cloud) |
+|---------|----------------------|-------------------|
+| **PDF Storage** | IndexedDB ArrayBuffer | S3/R2 with signed URLs for secure access |
+| **Metadata** | IndexedDB via Dexie | PostgreSQL with proper indexing |
+| **State** | Zustand (client-only) | Zustand + server state sync (React Query) |
+| **Diff Computation** | Client-side (diff-match-patch) | Background worker via job queue |
+| **Export Generation** | Client-side (pdf-lib) | Server-side worker for large documents |
+| **Real-time Sync** | N/A (single user) | Y.js CRDT + WebSocket via Redis pub/sub |
+| **Authentication** | None | JWT tokens + OAuth 2.0 SSO |
+| **Rate Limiting** | None | API Gateway with per-user limits |
+| **Caching** | Browser cache | Redis for session data, CDN for static assets |
+| **Monitoring** | Console logs | Prometheus + Grafana, Sentry for error tracking |
+| **Text Extraction** | PSPDFKit client-side | Background workers using server-side PSPDFKit |
 
-## Key Design Principles
+## Performance Considerations
 
-1. **Local-First**: All data stored in IndexedDB for offline capability
-2. **Immutable Versions**: Versions are never modified after creation
-3. **Binary Data Isolation**: PDF ArrayBuffers never stored in React state
-4. **Type Safety**: Comprehensive TypeScript types, no `any`
-5. **Component Isolation**: Each component has single responsibility
-6. **Lazy Loading**: PSPDFKit loaded dynamically to reduce bundle size
+| Area | Strategy | Implementation |
+|------|----------|----------------|
+| **Bundle Size** | PSPDFKit loaded dynamically | `import('pspdfkit')` only when viewer mounts |
+| **Memory** | Binary data isolation | PDF ArrayBuffers stored in IndexedDB, never in React state |
+| **Rendering** | Zustand store splitting | Three independent stores prevent unnecessary re-renders |
+| **Diff Speed** | Parallel computation | `Promise.all` runs text diff and annotation diff concurrently |
+| **Export** | Metadata-only loading | Version changelog loads metadata without PDF blobs |
+| **Page Load** | Skeleton states | Loading indicators appear immediately while async operations run |
+| **Sidebar** | Transition animations | CSS `transition-all duration-200` for smooth collapse/expand |
+| **Large PDFs** | Incremental rendering | PSPDFKit virtualizes page rendering; thumbnails use placeholders |
 
 ## UI Theme Strategy
 
@@ -428,6 +342,7 @@ The application uses a **mixed theme** approach:
 - **Header**: Light background (`bg-card`) with standard foreground colors
 - **Sidebars**: Dark theme (`#1a1a2e`) with slate-colored text for document navigation contrast
 - **Main viewer area**: Light neutral background for optimal PDF readability
+- **Diff mode**: Full-width replacement of normal layout, same light theme
 - **Accents**: Blue (`blue-500`) for selection states, active pages, and current version highlighting
 
 This avoids a full dark mode toggle while providing visual hierarchy that separates navigation (dark) from content (light).
@@ -443,12 +358,12 @@ No Document                    Document Loaded
 │                      │      │ P │              │ V  │
 │   Full-screen        │ ──►  │ a │  PDF Viewer  │ e  │
 │   Upload Drop Zone   │      │ g │  (PSPDFKit)  │ r  │
-│                      │      │ e │              │ s  │
+│   (fade-in)          │      │ e │  (fade-in)   │ s  │
 │                      │      │ s │              │    │
 └──────────────────────┘      └───┴──────────────┴────┘
 ```
 
-Sidebars only render when a document is loaded, keeping the upload screen clean and focused.
+Sidebars only render when a document is loaded, keeping the upload screen clean and focused. Both transitions use CSS fade-in animations.
 
 ## Annotation Event Flow
 
@@ -457,6 +372,7 @@ sequenceDiagram
     participant User
     participant PSPDFKit
     participant Viewer as PDFViewer
+    participant ErrorBoundary as PDFErrorBoundary
     participant Store as useAnnotationStore
     participant UI as AnnotationList + Badge
 
@@ -466,8 +382,38 @@ sequenceDiagram
     Viewer->>Store: addAnnotation() + addChange()
     Store-->>UI: Re-render annotation list
     Store-->>UI: Update unsaved changes badge count
+
+    Note over ErrorBoundary,Viewer: ErrorBoundary wraps viewer<br/>catches render errors with retry UI
 ```
 
 The annotation store tracks two arrays:
 - `annotations[]` — current snapshot of all annotations on the document
 - `pendingChanges[]` — change log since last version commit (drives the "unsaved changes" badge)
+
+## Mock API Architecture
+
+```mermaid
+flowchart LR
+    subgraph Client["Browser"]
+        Frontend["React Frontend"]
+        IDB[("IndexedDB")]
+    end
+
+    subgraph Server["Next.js Server"]
+        subgraph Routes["Route Handlers"]
+            R1["POST /api/documents"]
+            R2["GET /api/documents"]
+            R3["GET /api/documents/:id"]
+            R4["POST /api/documents/:id/versions"]
+            R5["GET /api/documents/:id/versions"]
+            R6["GET /api/documents/:id/diff?v1&v2"]
+        end
+        Store["In-Memory Map<br/>documents + versions"]
+    end
+
+    Frontend -->|"Currently uses"| IDB
+    Frontend -.->|"Future: API calls"| Routes
+    Routes --> Store
+```
+
+The mock API and IndexedDB currently operate independently. The frontend uses IndexedDB directly via Dexie. The API routes demonstrate the contract a production backend would implement, enabling a future migration where the frontend swaps Dexie calls for `fetch()` calls.

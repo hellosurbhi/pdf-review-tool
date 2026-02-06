@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect x="4" y="2" width="24" height="28" rx="3" fill="#1a1a2e" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="16" y="21" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="11" font-weight="bold" fill="#f8fafc">PDF</text>
+  <line x1="9" y1="8" x2="23" y2="8" stroke="#64748b" stroke-width="1.2"/>
+  <line x1="9" y1="11" x2="19" y2="11" stroke="#64748b" stroke-width="1.2"/>
+</svg>

@@ -10,3 +10,4 @@ export type { PSPDFKitInstanceType, PSPDFKitTextLine } from './PDFViewer';
 export { PageThumbnails } from './PageThumbnails';
 export { AnnotationToolbar } from './AnnotationToolbar';
 export { AnnotationList } from './AnnotationList';
+export { PDFErrorBoundary } from './ErrorBoundary';

@@ -9,9 +9,18 @@
  * - Left sidebar (240px): Page thumbnails, dark theme, collapsible
  * - Main content: PDF viewer, full-screen upload zone, or diff view
  * - Right sidebar (280px): Version history + annotation list, dark theme, collapsible
+ *
+ * UI polish:
+ * - Fade transitions between upload and viewer
+ * - Loading skeleton while PDF loads
+ * - Empty states with icons and helpful messages
+ * - Keyboard shortcuts: Ctrl+S (commit), Ctrl+E (export)
+ * - Error boundary around PDFViewer
+ * - Responsive layout (1024px+)
+ * - Tooltips on all icon buttons
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   FileText,
   Upload,
@@ -41,6 +50,7 @@ import {
   PageThumbnails,
   AnnotationToolbar,
   AnnotationList,
+  PDFErrorBoundary,
   goToPage,
   type PSPDFKitInstanceType,
 } from '@/components/pdf';
@@ -87,9 +97,30 @@ export default function Home() {
   const hasDocument = !!currentDocument;
   const canDiff = versions.length >= 2;
 
+  /**
+   * Keyboard shortcuts: Ctrl+S (commit), Ctrl+E (export)
+   */
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        if (e.key === 's' && hasDocument && !diffMode) {
+          e.preventDefault();
+          setCommitDialogOpen(true);
+        }
+        if (e.key === 'e' && hasDocument && !diffMode && versions.length >= 2 && currentVersionId) {
+          e.preventDefault();
+          // Trigger export by dispatching a custom event the ExportButton listens to
+          window.dispatchEvent(new CustomEvent('pdf-export-trigger'));
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [hasDocument, diffMode, versions.length, currentVersionId]);
+
   return (
     <TooltipProvider>
-      <div className="flex flex-col h-screen bg-background">
+      <div className="flex flex-col h-screen bg-background min-w-[768px]">
         {/* Header */}
         <header className="flex items-center justify-between h-14 px-4 border-b bg-card shrink-0">
           <div className="flex items-center gap-3">
@@ -148,10 +179,10 @@ export default function Home() {
                           onClick={() => setCommitDialogOpen(true)}
                         >
                           <GitCommitHorizontal className="h-4 w-4 mr-1.5" />
-                          Commit
+                          <span className="hidden sm:inline">Commit</span>
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Create a new version</TooltipContent>
+                      <TooltipContent>Create a new version (Ctrl+S)</TooltipContent>
                     </Tooltip>
 
                     <Tooltip>
@@ -163,7 +194,7 @@ export default function Home() {
                           disabled={!canDiff}
                         >
                           <GitCompareArrows className="h-4 w-4 mr-1.5" />
-                          Diff
+                          <span className="hidden sm:inline">Diff</span>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -247,9 +278,14 @@ export default function Home() {
                         />
                       ) : (
                         <div className="flex-1 flex items-center justify-center p-4">
-                          <p className="text-sm text-slate-500 text-center">
-                            Loading pages...
-                          </p>
+                          <div className="text-center">
+                            <div className="mx-auto w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mb-2 animate-pulse">
+                              <FileText className="h-4 w-4 text-slate-500" />
+                            </div>
+                            <p className="text-xs text-slate-500">
+                              Loading pages...
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -277,17 +313,28 @@ export default function Home() {
               {/* Main PDF Viewer / Upload Area */}
               <main className="flex-1 flex flex-col min-w-0 bg-muted/10">
                 {!currentDocument ? (
-                  <PDFUploader />
+                  <div className="animate-in fade-in duration-300">
+                    <PDFUploader />
+                  </div>
                 ) : currentVersionId ? (
-                  <PDFViewer
-                    versionId={currentVersionId}
-                    onPageChange={setCurrentPage}
-                    onTotalPagesChange={setTotalPages}
-                    onInstanceReady={handleInstanceReady}
-                  />
+                  <div className="flex-1 flex flex-col animate-in fade-in duration-300">
+                    <PDFErrorBoundary>
+                      <PDFViewer
+                        versionId={currentVersionId}
+                        onPageChange={setCurrentPage}
+                        onTotalPagesChange={setTotalPages}
+                        onInstanceReady={handleInstanceReady}
+                      />
+                    </PDFErrorBoundary>
+                  </div>
                 ) : (
                   <div className="flex-1 flex items-center justify-center">
-                    <p className="text-muted-foreground">Loading document...</p>
+                    <div className="text-center">
+                      <div className="mx-auto w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center mb-3 animate-pulse">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <p className="text-muted-foreground text-sm">Loading document...</p>
+                    </div>
                   </div>
                 )}
               </main>

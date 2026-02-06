@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { Clock, GitCommitHorizontal, AlertTriangle } from 'lucide-react';
+import { Clock, GitCommitHorizontal, AlertTriangle, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -106,9 +106,15 @@ export function VersionPanel({ onCommitClick }: VersionPanelProps) {
         <ScrollArea className="flex-1">
           <div className="p-3 space-y-2">
             {versions.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-8">
-                No versions yet
-              </p>
+              <div className="flex flex-col items-center justify-center py-12 px-4">
+                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center mb-3">
+                  <History className="h-5 w-5 text-slate-500" />
+                </div>
+                <p className="text-sm text-slate-400 font-medium mb-1">No versions yet</p>
+                <p className="text-xs text-slate-500 text-center">
+                  Click &quot;Create Version&quot; below to save the current state as V1
+                </p>
+              </div>
             ) : (
               versions.map((version) => {
                 const isCurrent = version.id === currentVersionId;

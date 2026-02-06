@@ -7,9 +7,10 @@
  * - Shows loading spinner during PDF generation
  * - Disabled when only V1 exists (nothing to annotate)
  * - Downloads the generated file on completion
+ * - Listens for Ctrl+E keyboard shortcut via custom event
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -38,10 +39,7 @@ export function ExportButton({
   const canExport = versionCount >= 2;
 
   const handleExport = useCallback(async () => {
-    if (!canExport) {
-      toast.info('No version history to export');
-      return;
-    }
+    if (!canExport || isExporting) return;
 
     setIsExporting(true);
     try {
@@ -53,7 +51,16 @@ export function ExportButton({
     } finally {
       setIsExporting(false);
     }
-  }, [canExport, documentId, documentName, currentVersionId]);
+  }, [canExport, isExporting, documentId, documentName, currentVersionId]);
+
+  /** Listen for keyboard shortcut trigger from page.tsx */
+  useEffect(() => {
+    function onExportTrigger() {
+      handleExport();
+    }
+    window.addEventListener('pdf-export-trigger', onExportTrigger);
+    return () => window.removeEventListener('pdf-export-trigger', onExportTrigger);
+  }, [handleExport]);
 
   return (
     <Tooltip>
@@ -73,7 +80,7 @@ export function ExportButton({
         </Button>
       </TooltipTrigger>
       <TooltipContent>
-        {canExport ? 'Export Annotated PDF' : 'Need at least 2 versions to export'}
+        {canExport ? 'Export Annotated PDF (Ctrl+E)' : 'Need at least 2 versions to export'}
       </TooltipContent>
     </Tooltip>
   );

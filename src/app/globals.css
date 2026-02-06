@@ -125,6 +125,20 @@
   }
 }
 
+/* Fade-in animation for view transitions */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-in {
+  animation: fadeIn var(--duration, 300ms) ease-out;
+}
+
+.fade-in {
+  --duration: 300ms;
+}
+
 /* Dark sidebar theme for left/right sidebars */
 .sidebar-dark {
   background-color: #1a1a2e;

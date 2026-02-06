@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PDF Review Tool",
   description: "Review, annotate, and version control your PDF documents",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

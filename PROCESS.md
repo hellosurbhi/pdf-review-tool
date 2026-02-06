@@ -4,17 +4,33 @@ This document tracks the development progress, decisions made, challenges encoun
 
 ---
 
+## Methodology
+
+This project was built using a **plan-first, phase-by-phase approach**:
+
+1. **Upfront Architecture**: Before writing code, the full system was designed — component hierarchy, data flow, state management, and database schema were documented in ARCHITECTURE.md.
+
+2. **Phased Implementation**: The project was split into 7 distinct phases (0–6), each with a clear scope. Each phase was completed and committed before moving to the next, ensuring the application was always in a working state.
+
+3. **Convention-Driven Development**: Project conventions (import order, naming, component structure, JSDoc, `useCallback` for handlers) were established in Phase 0 and followed consistently across all phases.
+
+4. **Build-Verify-Commit Cycle**: Every phase ended with a successful `npm run build`, ensuring no broken code was committed. TypeScript strict mode caught issues early.
+
+5. **Documentation-Alongside-Code**: PROCESS.md, ARCHITECTURE.md, and README.md were updated with each phase, not left until the end. This ensured accuracy and provided a real-time record of decisions.
+
+6. **Local-First Architecture**: All data operations use IndexedDB via Dexie. The mock API (Phase 6) was designed to demonstrate the production backend contract without changing the frontend's data flow.
+
+---
+
 ## Phase 0: Initial Project Setup
 
 **Date:** 2026-02-06
-**Duration:** ~45 minutes
 
 ### What Was Built
 
 1. **Next.js 14 Project Initialization**
    - Created new project with App Router, TypeScript, Tailwind CSS
    - Configured path aliases (`@/*`) for clean imports
-   - No ESLint initially (will add later with custom rules)
 
 2. **Dependencies Installed**
    - `pspdfkit` - PDF viewing, editing, and annotation SDK
@@ -53,198 +69,44 @@ This document tracks the development progress, decisions made, challenges encoun
 | **Zustand over Redux** | ~1KB bundle, minimal boilerplate. Two stores (document + version) stay decoupled and focused. |
 | **PSPDFKit evaluation mode** | No license key needed for development. Production deployment would require license. |
 | **Tailwind CSS v4** | Latest version with better performance, native CSS nesting, and improved DX. |
-| **No ESLint initially** | Will add with custom configuration in Phase 1 to avoid create-next-app defaults. |
 
 ### Challenges Encountered
 
-1. **Tailwind v4 + shadcn/ui Compatibility**
-   - shadcn now uses Tailwind v4 with new CSS variables system
-   - Required understanding the new `@theme` directive and CSS variable structure
-
-2. **PSPDFKit WASM Configuration**
-   - Needed webpack config to handle `canvas` and `encoding` module aliases
-   - Added CORS headers for SharedArrayBuffer (required by PSPDFKit)
-
-3. **TypeScript Strict Mode**
-   - Ensured all types are properly defined without `any`
-   - Created comprehensive interfaces for all data structures
-
-### Project Structure Created
-
-```
-pdf-review-tool/
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx      # Root layout with Toaster
-│   │   ├── page.tsx        # Main 3-column layout
-│   │   └── api/documents/  # API routes (future)
-│   ├── components/
-│   │   ├── ui/             # shadcn components
-│   │   ├── pdf/            # PDF-related components
-│   │   ├── version/        # Version control components
-│   │   └── export/         # Export functionality
-│   ├── store/
-│   │   ├── useDocumentStore.ts
-│   │   └── useVersionStore.ts
-│   ├── lib/
-│   │   ├── db.ts           # Dexie database
-│   │   └── utils.ts        # shadcn utilities
-│   └── types/
-│       └── index.ts        # All TypeScript types
-├── public/
-│   └── pspdfkit-lib/       # PSPDFKit assets (gitignored)
-├── next.config.ts          # Webpack + headers config
-├── PROCESS.md              # This file
-├── ARCHITECTURE.md         # System design diagrams
-└── README.md               # Project documentation
-```
-
-### What's Next (Phase 1)
-
-- [x] Implement PDF upload with drag-and-drop
-- [x] Integrate PSPDFKit viewer component
-- [x] Add file validation (PDF only, size limits)
-- [x] Create initial version on upload
-- [x] Display page thumbnails in left sidebar
-- [x] Toast notifications for user feedback
+1. **Tailwind v4 + shadcn/ui Compatibility** — Required understanding the new `@theme` directive and CSS variable structure
+2. **PSPDFKit WASM Configuration** — Needed webpack config to handle `canvas` and `encoding` module aliases
+3. **TypeScript Strict Mode** — All types defined without `any` from the start
 
 ---
 
 ## Phase 1: PDF Upload & Viewing
 
 **Date:** 2026-02-06
-**Duration:** ~30 minutes
 
 ### What Was Built
 
-1. **PDFUploader Component** (`src/components/pdf/PDFUploader.tsx`)
-   - Drag-and-drop upload zone with visual feedback
-   - File picker fallback for clicking to browse
-   - File validation: PDF only, max 50MB
-   - Loading state with spinner during upload
-   - Creates document and initial version in IndexedDB
-   - Toast notifications for success/error feedback
+1. **PDFUploader Component** — Full-screen drag-and-drop upload zone with animated visual feedback, drag counter pattern for flicker prevention, file validation (PDF only, 50MB max), loading states, and toast notifications
 
-2. **PDFViewer Component** (`src/components/pdf/PDFViewer.tsx`)
-   - Dynamically loads PSPDFKit to avoid SSR issues
-   - Manages PSPDFKit instance lifecycle with proper cleanup
-   - Loading state overlay while PDF loads
-   - Error state display if loading fails
-   - Callbacks for page changes and total pages
-   - Exposes instance reference for external navigation
+2. **PDFViewer Component** — Dynamically loaded PSPDFKit SDK with full toolbar configuration (zoom, pager, search, annotation tools), proper instance lifecycle management, loading/error states, and instance reference passing
 
-3. **PageThumbnails Component** (`src/components/pdf/PageThumbnails.tsx`)
-   - Displays clickable page placeholders
-   - Visual selection state for current page
-   - Scrollable container for many pages
-   - Syncs with PDF viewer navigation
+3. **PageThumbnails Component** — Clickable page navigation in dark sidebar, auto-scroll to current page, blue accent for active page
 
-4. **Main Page Integration** (`src/app/page.tsx`)
-   - Upload dialog triggered from header button
-   - PDF viewer renders when document is loaded
-   - Page thumbnails update when PSPDFKit reports total pages
-   - Bidirectional navigation: thumbnails ↔ viewer
+4. **Dark Sidebar Theme** — `.sidebar-dark` CSS class with #1a1a2e background, custom scrollbar styling, mixed theme approach (dark sidebars, light main area)
+
+5. **Layout Integration** — Version badge in header, sidebars only render with document loaded, smooth transitions
 
 ### Key Technical Decisions
 
 | Decision | Rationale |
 |----------|-----------|
 | **Dynamic import for PSPDFKit** | WebAssembly cannot be loaded during SSR; dynamic import ensures client-side only loading |
-| **Separate component files** | Each component is focused and testable; index.ts provides clean re-exports |
-| **Callbacks for instance communication** | Parent component can control viewer (e.g., goToPage) without tight coupling |
-| **Placeholder thumbnails** | Actual PDF thumbnails require canvas rendering; placeholders work for MVP |
-| **ArrayBuffer storage in IndexedDB** | PDF data never enters React state; prevents memory issues with large files |
+| **Drag counter pattern** | Using a counter instead of `dragLeave` prevents flicker when dragging over child elements |
+| **PSPDFKit toolbar config** | Provides zoom, search, annotation tools out of the box without custom implementation |
+| **Conditional sidebar rendering** | Upload screen shows clean without empty sidebars; sidebars appear on document load |
 
 ### Challenges Encountered
 
-1. **PSPDFKit Dynamic Import Typing**
-   - TypeScript didn't recognize the default export structure
-   - Fixed by casting: `pspdfkitModule.default as unknown as PSPDFKitModule`
-
-2. **Type Sharing Between Components**
-   - PSPDFKitInstanceType needed in multiple files
-   - Solution: Export from PDFViewer.tsx, re-export in index.ts
-
-3. **Instance Cleanup**
-   - PSPDFKit requires explicit dispose() on unmount
-   - Used isMounted flag to prevent operations after unmount
-
-### Files Created/Modified
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/components/pdf/PDFUploader.tsx` | Created | Drag-drop upload dialog |
-| `src/components/pdf/PDFViewer.tsx` | Created | PSPDFKit viewer wrapper |
-| `src/components/pdf/PageThumbnails.tsx` | Created | Page navigation sidebar |
-| `src/components/pdf/index.ts` | Created | Component re-exports |
-| `src/app/page.tsx` | Modified | Integrated all PDF components |
-
-### What's Next (Phase 2)
-
-- [ ] Version creation with commit message
-- [ ] Version switching in the sidebar
-- [ ] Export PDF functionality
-- [ ] Annotation tools integration
-
----
-
-## Phase 1.1: Upload & Viewer Polish
-
-**Date:** 2026-02-06
-
-### What Was Built
-
-1. **Full-Screen Upload Zone** (`src/components/pdf/PDFUploader.tsx`)
-   - Replaced dialog-based upload with full-screen inline drop zone
-   - Animated drag feedback: dashed border turns solid blue, icon bounces
-   - Drag counter prevents flicker when dragging over child elements
-   - Centered polished UI with "Browse Files" CTA button
-   - Loading state with spinner while processing document
-   - Correct toast: "Document uploaded — Version 1 created"
-
-2. **Enhanced PDF Viewer** (`src/components/pdf/PDFViewer.tsx`)
-   - Full PSPDFKit toolbar configuration: zoom, pager, search, annotation tools
-   - Toolbar items: sidebar-thumbnails, bookmarks, pager, zoom controls, search, annotate, ink, highlighter, text-highlighter, note, text, print
-   - Text selection enabled via `disableTextSelection: false`
-   - PSPDFKit's built-in thumbnail sidebar available via toolbar toggle
-   - Improved error state with AlertTriangle icon and reload button
-
-3. **Dark Sidebar Theme** (`src/app/globals.css`)
-   - Added `.sidebar-dark` CSS class with `#1a1a2e` background
-   - Custom scrollbar styling for dark sidebars
-   - Both left (page thumbnails) and right (version history) sidebars use dark theme
-
-4. **Layout Improvements** (`src/app/page.tsx`)
-   - Version badge ("V1") displayed in header next to document name
-   - Commit button and Export button in header (disabled, wired for Phase 2)
-   - Sidebars only render when a document is loaded (clean upload screen)
-   - Smooth transitions between upload zone and viewer
-   - Dark-themed sidebars with slate color text for readability
-
-5. **Page Thumbnails Update** (`src/components/pdf/PageThumbnails.tsx`)
-   - Styled for dark sidebar: white/10 borders, slate text colors
-   - Active page scrolls into view automatically
-   - Blue accent border and background for current page
-
-### Key Technical Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| **Inline upload instead of dialog** | Full-screen drop zone matches spec; more inviting UX when no document is loaded |
-| **Drag counter pattern** | Using a counter instead of `dragLeave` prevents flicker when dragging over child elements |
-| **PSPDFKit toolbar config** | Provides zoom, search, annotation tools out of the box without custom implementation |
-| **`.sidebar-dark` CSS class** | Achieves mixed theme (dark sidebars, light main area) without full dark mode toggle |
-| **Conditional sidebar rendering** | Upload screen shows clean without empty sidebars; sidebars appear on document load |
-
-### Files Modified
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/components/pdf/PDFUploader.tsx` | Rewritten | Full-screen drop zone with animations |
-| `src/components/pdf/PDFViewer.tsx` | Enhanced | PSPDFKit toolbar/search/annotation config |
-| `src/components/pdf/PageThumbnails.tsx` | Updated | Dark sidebar styling, auto-scroll |
-| `src/app/page.tsx` | Rewritten | Version badge, commit button, dark sidebars |
-| `src/app/globals.css` | Updated | Added sidebar-dark theme class |
+1. **PSPDFKit Dynamic Import Typing** — TypeScript didn't recognize default export; fixed with double cast
+2. **Instance Cleanup** — PSPDFKit requires explicit `dispose()` on unmount; used `isMounted` flag
 
 ---
 
@@ -254,94 +116,30 @@ pdf-review-tool/
 
 ### What Was Built
 
-1. **Annotation Change Tracking** (`src/store/useAnnotationStore.ts`)
-   - New Zustand store for tracking annotations and pending changes
-   - `TrackedAnnotation` type normalizes PSPDFKit annotations into our format
-   - `AnnotationChangeRecord` tracks each create/update/delete action
-   - `useUnsavedChangeCount()` selector for unsaved change badge
-   - Changes accumulate until cleared by a version commit
+1. **Annotation Change Tracking** — New `useAnnotationStore` Zustand store with `TrackedAnnotation` and `AnnotationChangeRecord` types, accumulating changes until commit
 
-2. **PSPDFKit Annotation Events** (`src/components/pdf/PDFViewer.tsx`)
-   - Listens to `annotations.create`, `annotations.update`, `annotations.delete`
-   - Maps PSPDFKit annotation types to our `AnnotationType` enum
-   - Extracts contents, color, page index from PSPDFKit annotations
-   - Syncs all existing annotations on initial load
-   - Records every change as an `AnnotationChangeRecord`
+2. **PSPDFKit Annotation Events** — Listeners for `annotations.create/update/delete`, type mapping from PSPDFKit types to our enum, contents/color extraction, initial sync on load
 
-3. **Annotation Toolbar** (`src/components/pdf/AnnotationToolbar.tsx`)
-   - Floating toolbar below header with annotation tools
-   - Tools: Pointer (select), Highlight (with 4-color picker dropdown), Sticky Note, Free Text, Redaction
-   - Active tool gets highlighted/selected state (`bg-primary/10`)
-   - Color picker shows yellow, green, blue, pink options
-   - Active color indicator when highlight tool is selected
-   - Communicates with PSPDFKit via contentDocument button clicks
+3. **Annotation Toolbar** — Floating toolbar with Pointer, Highlight (4-color picker), Sticky Note, Free Text, and Redaction tools
 
-4. **Annotation List** (`src/components/pdf/AnnotationList.tsx`)
-   - Right sidebar component listing all annotations
-   - Each entry shows: type icon (color-coded), page number, preview text
-   - Click navigates viewer to annotation's page
-   - Delete with two-click confirmation (3s auto-reset timeout)
-   - Sorted by page index, then creation date
-   - Empty state with "No annotations yet" message
+4. **Annotation List** — Right sidebar showing annotations sorted by page, with type icons, color coding, click-to-navigate, and two-click deletion
 
-5. **"Unsaved Changes" Badge** (`src/app/page.tsx`)
-   - Amber badge in header shows count of pending changes
-   - Appears when annotation changes exist since last commit
-   - Tooltip explains: "Commit to save these changes as a new version"
+5. **Unsaved Changes Badge** — Amber badge in header showing pending change count
 
-6. **Tabbed Right Sidebar** (`src/app/page.tsx`)
-   - Right sidebar now has Versions and Annotations tabs
-   - Annotation tab shows count badge
-   - Clean tab switching within dark sidebar theme
-
-7. **Type System Updates** (`src/types/index.ts`)
-   - Added `TrackedAnnotation` interface for normalized annotations
-   - Added `AnnotationChangeRecord` for change tracking
-   - Added `AnnotationState` store interface
+6. **Tabbed Right Sidebar** — Versions and Annotations tabs in the right sidebar
 
 ### Key Technical Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| **Separate annotation store** | Annotation state is high-frequency and independent of version/document state; separate store prevents unnecessary re-renders |
-| **Direct store access via `getState()`** | Event handlers access `useAnnotationStore.getState()` instead of closures to always read latest state |
-| **PSPDFKit type mapping** | Normalize PSPDFKit's diverse annotation types into our 5-enum `AnnotationType` for simpler tracking |
-| **Two-click delete with timeout** | Prevents accidental deletion without a modal dialog; auto-resets after 3 seconds |
-| **Tabbed sidebar** | Keeps version history and annotations in one panel without doubling sidebar width |
-| **Color extraction from PSPDFKit** | Convert PSPDFKit's `{ r, g, b }` color objects to hex strings for storage |
+| **Separate annotation store** | High-frequency annotation state independent of version/document; prevents unnecessary re-renders |
+| **`getState()` for event handlers** | Event handlers access latest store state without closure staleness |
+| **Two-click delete** | Prevents accidental deletion without modal dialog; auto-resets after 3s |
 
 ### Challenges Encountered
 
-1. **PSPDFKit Annotation Event Types**
-   - PSPDFKit passes `Immutable.List` objects in event callbacks, not plain arrays
-   - Handled by typing as interface with `forEach` method
-
-2. **TypeScript Strict Color Extraction**
-   - `color.g` and `color.b` needed individual `typeof` checks, not just checking `color.r`
-   - Fixed by adding explicit type guards for all three color channels
-
-3. **Toolbar ↔ PSPDFKit Communication**
-   - PSPDFKit's interaction mode API varies by license; used contentDocument approach as fallback
-   - Built-in toolbar buttons still available for users who prefer them
-
-### Files Created/Modified
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/types/index.ts` | Modified | Added TrackedAnnotation, AnnotationChangeRecord, AnnotationState |
-| `src/store/useAnnotationStore.ts` | Created | Annotation tracking Zustand store |
-| `src/components/pdf/PDFViewer.tsx` | Modified | Annotation event listeners, type mapping |
-| `src/components/pdf/AnnotationToolbar.tsx` | Created | Floating annotation tool bar |
-| `src/components/pdf/AnnotationList.tsx` | Created | Sidebar annotation list with navigation |
-| `src/components/pdf/index.ts` | Modified | Added new component exports |
-| `src/app/page.tsx` | Modified | Toolbar integration, tabbed sidebar, unsaved badge |
-
-### What's Next (Phase 3)
-
-- [x] Version creation with commit message dialog
-- [x] Version switching and loading
-- [ ] Diff/comparison between versions
-- [ ] Export PDF functionality
+1. **PSPDFKit Annotation Event Types** — Passes `Immutable.List`, not plain arrays; typed with `forEach` interface
+2. **TypeScript Strict Color Extraction** — Each color channel needs individual `typeof` check
 
 ---
 
@@ -351,67 +149,20 @@ pdf-review-tool/
 
 ### What Was Built
 
-1. **CommitDialog Component** (`src/components/version/CommitDialog.tsx`)
-   - Modal dialog for creating new versions (commits)
-   - Auto-generated version number (max existing + 1)
-   - Required commit message textarea with placeholder
-   - Change summary panel: shows added/modified/removed annotation counts
-   - Exports PDF data via `exportPDF()`, annotations via `exportInstantJSON()`
-   - Extracts text from every page via `textLinesForPageIndex()` for future diffing
-   - Saves version to IndexedDB, clears unsaved changes, shows success toast
-   - Loading state with spinner during commit
+1. **CommitDialog Component** — Modal with auto-generated version number, required commit message, change summary (added/modified/removed counts), exports PDF + annotations (Instant JSON) + text content per page
 
-2. **VersionPanel Component** (`src/components/version/VersionPanel.tsx`)
-   - Replaces inline version list in right sidebar
-   - Reverse chronological order with clickable version cards
-   - Version badge (V1, V2, ...) with blue accent left border for current
-   - Commit message truncated to one line
-   - Relative timestamps (just now, 5m ago, 2h ago, 3d ago)
-   - Annotation count badge per version
-   - Click to switch versions, triggers PSPDFKit reload via versionId prop change
-   - Unsaved changes warning dialog: "You have X unsaved changes. Switching versions will discard them." with Cancel/Discard & Switch buttons
-   - "Create Version" button at bottom wired to CommitDialog
+2. **VersionPanel Component** — Reverse chronological version cards with blue accent for current, relative timestamps, annotation count badges, click-to-switch with unsaved changes warning dialog
 
-3. **PSPDFKit Type Updates** (`src/components/pdf/PDFViewer.tsx`)
-   - Added `exportInstantJSON()` to `PSPDFKitInstanceType`
-   - Added `textLinesForPageIndex()` to `PSPDFKitInstanceType`
-   - Added `PSPDFKitTextLine` interface
-
-4. **Page Integration** (`src/app/page.tsx`)
-   - Commit button in header now opens CommitDialog (no longer disabled)
-   - Replaced inline version list with VersionPanel component
-   - CommitDialog receives PSPDFKit instance ref for export operations
-   - Version switching triggers PDFViewer reload (versionId prop changes)
-   - Removed unused ScrollArea import
+3. **PSPDFKit Type Extensions** — Added `exportInstantJSON()`, `textLinesForPageIndex()`, and `PSPDFKitTextLine` interface
 
 ### Key Technical Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| **Text extraction via textLinesForPageIndex** | PSPDFKit's per-page text line API gives structured text with positions; stored as JSON `[{ pageIndex, text }]` for future diffing |
-| **exportInstantJSON for annotations** | Captures full PSPDFKit annotation state including tool-specific data not in our TrackedAnnotation |
-| **Unsaved changes warning dialog** | Prevents accidental data loss when switching versions with pending changes |
-| **Version switching via versionId prop** | PDFViewer already reloads when `versionId` changes; no additional reload logic needed |
-| **Relative timestamps** | More user-friendly than absolute dates for recent activity |
-| **Annotation count from JSON** | Parses version annotations JSON to show count badge without loading full data |
-
-### Files Created/Modified
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/components/version/CommitDialog.tsx` | Created | Version commit dialog with export + text extraction |
-| `src/components/version/VersionPanel.tsx` | Created | Version history panel with switching + warning |
-| `src/components/version/index.ts` | Created | Component re-exports |
-| `src/components/pdf/PDFViewer.tsx` | Modified | Added exportInstantJSON, textLinesForPageIndex, PSPDFKitTextLine |
-| `src/components/pdf/index.ts` | Modified | Added PSPDFKitTextLine export |
-| `src/app/page.tsx` | Modified | Wired CommitDialog, replaced inline version list with VersionPanel |
-
-### What's Next (Phase 4)
-
-- [x] Diff/comparison between versions (text diff, annotation diff)
-- [x] Visual diff overlay (per-page diff panel)
-- [ ] Export PDF functionality
-- [ ] Flattened export (annotations burned in)
+| **Text extraction via textLinesForPageIndex** | Per-page text stored as JSON for future diffing |
+| **exportInstantJSON for annotations** | Captures full PSPDFKit annotation state including tool-specific data |
+| **Version switching via versionId prop** | PDFViewer reactively reloads when prop changes |
+| **Relative timestamps** | More user-friendly than absolute dates |
 
 ---
 
@@ -421,69 +172,26 @@ pdf-review-tool/
 
 ### What Was Built
 
-1. **Diff Engine** (`src/lib/diff-utils.ts`)
-   - `computeTextDiff()`: Loads textContent from IndexedDB for both versions, runs diff-match-patch per page with `diff_cleanupSemantic`, returns per-page results with `hasChanges`, `addedCount`, `removedCount`
-   - `computeAnnotationDiff()`: Compares annotation JSON arrays between versions, detects added (in new but not old), deleted (in old but not new), modified (same id, different properties)
-   - `computeFullDiff()`: Runs both diffs in parallel, produces a `DiffResult` with text diffs, annotation changes, and summary stats
+1. **Diff Engine** (`diff-utils.ts`) — `computeTextDiff()` with diff-match-patch per page, `computeAnnotationDiff()` comparing by annotation ID, `computeFullDiff()` running both in parallel
 
-2. **VersionDiff Component** (`src/components/version/VersionDiff.tsx`)
-   - **Diff Controls**: Two dropdown selectors (Base version / Compare with) populated with all versions, Compare button to trigger computation, Exit Diff button to return to normal view
-   - **Text Diff Visualization**: Per-page diff panels with color-coded inline diffs — green highlighted text for additions, red strikethrough for deletions, unchanged text in muted color
-   - **Annotation Diff Display**: List of annotation changes with colored icons — green plus for added, red minus for removed, amber pencil for modified, each with description and page number
-   - **Summary Panel** (right sidebar in diff mode): Total changes count, breakdown by type (text changes across N pages, annotations added/removed/modified), per-page change indicator buttons with navigation
-   - **Change Navigation**: Previous/Next change buttons to cycle through changed pages, current position counter (e.g., "2 / 5")
-   - **Diff Legend**: Always visible during diff mode with color-coded squares (green=added, red=removed, amber=modified), toggle checkboxes to show/hide each diff type in real-time
-   - Loading state with spinner during computation, empty state when no diff computed yet
+2. **VersionDiff Component** — Two dropdown selectors, Compare button, per-page text diff panels with green additions/red deletions, annotation change entries, summary panel with total/per-type stats, prev/next navigation, legend with toggle checkboxes
 
-3. **Type Updates** (`src/types/index.ts`)
-   - Enhanced `TextDiff` with `hasChanges`, `addedCount`, `removedCount` fields
-   - Added `AnnotationDiffResult` and `AnnotationDiffEntry` interfaces
-
-4. **Page Integration** (`src/app/page.tsx`)
-   - Diff button in header (enabled when 2+ versions exist)
-   - Diff mode replaces normal layout (viewer + sidebars) with full-width VersionDiff
-   - "Diff Mode" badge replaces version badge in header during comparison
-   - Commit/Export/unsaved changes hidden during diff mode
-   - Exit Diff restores normal viewer
+3. **Type Updates** — Enhanced `TextDiff` with `hasChanges`/`addedCount`/`removedCount`, added `AnnotationDiffResult` and `AnnotationDiffEntry`
 
 ### Key Technical Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| **Per-page diff panel instead of overlay** | Exact PDF coordinate positioning is unreliable across versions with different page geometries; a panel view provides accurate, readable diffs |
-| **diff-match-patch with cleanupSemantic** | Character-level diff produces noisy results; semantic cleanup groups related changes for readability |
-| **Parallel diff computation** | Text diff and annotation diff are independent; `Promise.all` halves computation time |
-| **Diff mode replaces main layout** | Diff view needs full width for readable results; switching between viewer and diff is cleaner than overlaying |
-| **Toggle checkboxes in legend** | Users can focus on additions-only or deletions-only during review without re-computing the diff |
-| **Inline diff segments (not side-by-side)** | Inline shows additions and deletions in context; easier to read for text that changed in place |
+| **Per-page diff panel** | PDF coordinate positioning unreliable across versions; panel provides accurate diffs |
+| **diff-match-patch with cleanupSemantic** | Semantic cleanup groups related changes for readability |
+| **Parallel diff computation** | `Promise.all` halves computation time for independent operations |
+| **Diff mode replaces layout** | Full width needed for readable diffs |
+| **Inline diff (not side-by-side)** | Shows additions and deletions in context |
 
 ### Challenges Encountered
 
-1. **diff-match-patch Import**
-   - Package uses CommonJS default export; `import DiffMatchPatch from 'diff-match-patch'` works with `@types/diff-match-patch`
-
-2. **Annotation JSON Parsing**
-   - PSPDFKit Instant JSON format wraps annotations in `{ format, annotations: [...] }` object
-   - Plain array format also possible; `parseAnnotations` handles both
-
-3. **TextDiff Type Enhancement**
-   - Existing `TextDiff` type lacked `hasChanges`, `addedCount`, `removedCount`
-   - Extended interface to support summary statistics without re-computing
-
-### Files Created/Modified
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `src/lib/diff-utils.ts` | Created | Text diff engine + annotation diff + full comparison |
-| `src/components/version/VersionDiff.tsx` | Created | Diff controls, text/annotation visualization, summary, legend |
-| `src/components/version/index.ts` | Modified | Added VersionDiff export |
-| `src/types/index.ts` | Modified | Enhanced TextDiff, added AnnotationDiffResult/Entry |
-| `src/app/page.tsx` | Modified | Diff button, diff mode toggle, layout switching |
-
-### What's Next (Phase 5)
-
-- [x] Export annotated PDF with changelog and inline callouts
-- [ ] Flattened export (annotations burned into PDF)
+1. **diff-match-patch Import** — CommonJS default export works with `@types/diff-match-patch`
+2. **Annotation JSON Parsing** — Handles both Instant JSON format and plain arrays
 
 ---
 
@@ -493,72 +201,137 @@ pdf-review-tool/
 
 ### What Was Built
 
-1. **Export Engine** (`src/lib/pdf-utils.ts`)
-   - `exportAnnotatedPDF()`: Main export function using pdf-lib
-   - Step 1: Loads current PDF via `PDFDocument.load()`
-   - Step 2: Inserts a change log cover page at index 0 (letter size 612x792):
-     - Title "Document Change Log" in Helvetica-Bold 24pt, centered
-     - Subtitle with document name + export date in 12pt
-     - Horizontal line separator
-     - Table with columns: Version | Date | Message | Changes
-     - Alternating row backgrounds (light gray / white)
-     - Dark header row with white text
-     - Commit messages truncated to 80 chars
-   - Step 3: Adds inline callout boxes on affected pages:
-     - Light blue background rectangle (rgb 0.9, 0.95, 1.0)
-     - Dark blue border (rgb 0.3, 0.45, 0.7)
-     - 7pt text like "V2-#1: Highlight added"
-     - 150w x 20h callout boxes, stacked vertically from top-right margin
-   - Step 4: Generates PDF bytes, creates Blob, triggers download via hidden anchor
-   - `exportAnnotatedPDFFromDB()`: Wrapper that loads version data from IndexedDB
-   - `extractChangesByPage()`: Parses annotation JSON to detect added/deleted by page
-   - Fonts embedded once at document level for reuse across pages
+1. **Export Engine** (`pdf-utils.ts`) — Loads current PDF via `PDFDocument.load()`, inserts cover page with version history table (dark header row, alternating backgrounds, truncated messages), adds inline callout boxes on affected pages (150x20, light blue, stacked vertically), triggers download
 
-2. **ExportButton Component** (`src/components/export/ExportButton.tsx`)
-   - Header button with download icon, tooltip
-   - Loading spinner during PDF generation
-   - Disabled when only V1 exists (need 2+ versions for meaningful export)
-   - Tooltip explains: "Need at least 2 versions to export" when disabled
-   - Success/error toasts on completion
-
-3. **Page Integration** (`src/app/page.tsx`)
-   - Replaced disabled export icon button with live ExportButton component
-   - Passes documentId, documentName, currentVersionId, versionCount props
+2. **ExportButton Component** — Header button with loading spinner, disabled when only V1 exists, tooltip explains state, success/error toasts
 
 ### Key Technical Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| **pdf-lib over PSPDFKit export** | pdf-lib is pure JS, enables inserting cover pages and drawing custom graphics; PSPDFKit export only saves current state |
-| **Cover page at index 0** | Change log is the first thing a reviewer sees when opening the PDF |
-| **Callout offset by 1** | Cover page insertion shifts all original pages by +1; callout page indices must account for this |
-| **Fonts embedded at doc level** | `embedFont()` is async and should only be called once per font; passed to draw functions as params |
-| **Metadata-only version loading** | `exportAnnotatedPDFFromDB` sets `pdfData: new ArrayBuffer(0)` for changelog versions — only the current version's PDF blob is loaded |
-| **Uint8Array.buffer cast** | pdf-lib's `save()` returns `Uint8Array`; TypeScript strict mode requires explicit `ArrayBuffer` cast for `Blob` constructor |
+| **pdf-lib over PSPDFKit export** | Pure JS enables custom cover pages and callout graphics |
+| **Cover page at index 0** | Change log is first thing reviewer sees |
+| **Callout offset by +1** | Account for inserted cover page shifting original pages |
+| **Fonts embedded at doc level** | `embedFont()` called once, passed to draw functions |
+| **Metadata-only version loading** | Only current version's PDF blob loaded; others get empty ArrayBuffer |
 
 ### Challenges Encountered
 
-1. **PDFDocument Private Constructor**
-   - `InstanceType<typeof PDFDocument>` fails because pdf-lib's constructor is private
-   - Fixed by using `PDFDocument` type directly (imported as value, works for function params)
+1. **PDFDocument Private Constructor** — `InstanceType<typeof PDFDocument>` fails; used `PDFDocument` directly as type
+2. **Uint8Array / BlobPart** — TypeScript strict mode requires `pdfBytes.buffer as ArrayBuffer` for Blob constructor
 
-2. **Uint8Array / BlobPart Incompatibility**
-   - TypeScript strict mode: `Uint8Array<ArrayBufferLike>` not assignable to `BlobPart`
-   - Fixed with `pdfBytes.buffer as ArrayBuffer`
+---
+
+## Phase 6: Mock Backend API + UI Polish
+
+**Date:** 2026-02-06
+
+### What Was Built
+
+1. **Mock Backend API** (Next.js Route Handlers)
+   - `_store.ts` — In-memory `Map<string, StoredDocument>` and `Map<string, StoredVersion>` with helper methods
+   - `POST /api/documents` — Accept multipart/form-data PDF upload, validate type/size, store in memory, return metadata (201)
+   - `GET /api/documents` — Return all documents sorted by creation date
+   - `GET /api/documents/:id` — Return document with full version list (404 if not found)
+   - `POST /api/documents/:id/versions` — Create version with message + optional annotations/textContent/pdfData (base64), auto-increment version number (201)
+   - `GET /api/documents/:id/versions` — Return all versions for document
+   - `GET /api/documents/:id/diff?v1=X&v2=Y` — Compute text diff (diff-match-patch per page) and annotation diff (by ID comparison) between two versions
+   - All routes include proper HTTP status codes (201/200/400/404/500), TypeScript types for request/response, and error handling
+
+2. **UI Polish**
+   - **Fade Transitions** — CSS `animate-in fade-in` animations on upload→viewer and document loading states
+   - **Loading Skeletons** — Pulse animations in page thumbnail sidebar and document loading state
+   - **Empty States** — Icon + message for: "No versions yet" (History icon + helpful CTA), "No annotations yet" (MessageSquare icon + toolbar hint), "Loading pages..." (pulse skeleton)
+   - **Keyboard Shortcuts** — `Ctrl+S` / `Cmd+S` opens commit dialog, `Ctrl+E` / `Cmd+E` triggers export (via custom DOM event from page.tsx to ExportButton)
+   - **Error Boundary** — `PDFErrorBoundary` class component wrapping PDFViewer with "Something went wrong" UI, error message display, and retry button
+   - **Favicon** — SVG document icon with "PDF" text, dark theme matching sidebar
+   - **Page Title** — "PDF Review Tool" with description in metadata
+   - **Responsive Layout** — `min-w-[768px]` on root container, `hidden sm:inline` for button labels on smaller screens, collapsible sidebars
+   - **Tooltips** — All icon buttons in header have keyboard shortcut hints in tooltips (e.g., "Create a new version (Ctrl+S)")
+
+3. **Documentation Finalization**
+   - README.md — Professional format with features table, tech stack justifications, quick start, API reference, keyboard shortcuts, testing checklist, future improvements
+   - ARCHITECTURE.md — 6 accurate Mermaid diagrams (high-level, data flow, component hierarchy, state management, DB schema, production scaling) + Key Scaling Decisions table + Performance Considerations table + Mock API Architecture diagram
+   - PROCESS.md — All 7 phases documented with decisions/challenges, Methodology section, Retrospective section
+
+### Key Technical Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **In-memory Map storage** | Simplest mock that demonstrates the API contract without infrastructure overhead |
+| **Separate `_store.ts` file** | Singleton pattern ensures all route handlers share the same data |
+| **Custom DOM event for keyboard export** | Clean separation — page.tsx handles keyboard events, ExportButton handles export logic |
+| **CSS animation over library** | Simple `@keyframes fadeIn` avoids adding another dependency for basic transitions |
+| **Class-based ErrorBoundary** | React error boundaries require `getDerivedStateFromError` which only works with class components |
+| **SVG favicon** | No build step needed, scales to any size, matches dark theme |
+| **`params` as Promise** | Next.js 16 requires `await params` in route handlers (breaking change from Next.js 14) |
+
+### Challenges Encountered
+
+1. **Next.js 16 Route Handler Params** — `params` is now a `Promise<{ id: string }>` requiring `await`; different from Next.js 14's synchronous access
 
 ### Files Created/Modified
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `src/lib/pdf-utils.ts` | Created | Export engine with cover page + inline callouts |
-| `src/components/export/ExportButton.tsx` | Created | Header export button with loading state |
-| `src/components/export/index.ts` | Created | Component re-exports |
-| `src/app/page.tsx` | Modified | Wired ExportButton, removed disabled placeholder |
+| `src/app/api/_store.ts` | Created | In-memory Map storage with types and helpers |
+| `src/app/api/documents/route.ts` | Created | POST (upload) + GET (list) documents |
+| `src/app/api/documents/[id]/route.ts` | Created | GET document with version list |
+| `src/app/api/documents/[id]/versions/route.ts` | Created | POST (create) + GET (list) versions |
+| `src/app/api/documents/[id]/diff/route.ts` | Created | GET text + annotation diff |
+| `src/components/pdf/ErrorBoundary.tsx` | Created | Error boundary with retry UI |
+| `src/components/pdf/index.ts` | Modified | Added PDFErrorBoundary export |
+| `src/components/export/ExportButton.tsx` | Modified | Added keyboard shortcut listener |
+| `src/components/version/VersionPanel.tsx` | Modified | Enhanced empty state with icon |
+| `src/app/page.tsx` | Modified | Keyboard shortcuts, fade transitions, error boundary, responsive |
+| `src/app/layout.tsx` | Modified | Favicon metadata |
+| `src/app/globals.css` | Modified | Fade-in animation keyframes |
+| `src/app/favicon.svg` | Created | PDF document icon |
+| `public/favicon.svg` | Created | Copy for static serving |
+| `README.md` | Rewritten | Professional open-source format |
+| `ARCHITECTURE.md` | Rewritten | 6 Mermaid diagrams + scaling tables |
+| `PROCESS.md` | Finalized | All phases + methodology + retrospective |
 
-### What's Next (Phase 6)
+---
 
-- [ ] Flattened export (annotations burned into PDF)
-- [ ] Settings panel / preferences
-- [ ] Multi-document support
+## Retrospective
+
+### What Went Well
+
+1. **Phased approach kept scope manageable** — Each phase had a clear goal and was independently testable. No phase took longer than expected because scope was well-defined upfront.
+
+2. **TypeScript strict mode prevented bugs** — Several type errors (PDFDocument private constructor, Uint8Array/BlobPart incompatibility, PSPDFKit event types) were caught at compile time rather than runtime. The upfront investment in comprehensive types paid off in every phase.
+
+3. **Local-first architecture simplified development** — No backend infrastructure to manage. IndexedDB via Dexie provided instant operations, and the architecture naturally supports offline use.
+
+4. **PSPDFKit's annotation system was powerful** — Built-in annotation tools, Instant JSON export, and text extraction saved significant development time. The evaluation mode watermark is the only downside.
+
+5. **Zustand + Dexie pattern worked well** — Metadata in Zustand for reactivity, binary data in IndexedDB for performance. Three independent stores prevented re-render cascades.
+
+6. **Convention-driven development reduced decision fatigue** — Established import order, component structure, and naming patterns once in Phase 0, then followed them consistently. Code review would find high consistency across all files.
+
+### What I'd Do Differently
+
+1. **Start with PSPDFKit type definitions** — I spent time iterating on the `PSPDFKitInstanceType` interface across phases. Creating a comprehensive type file upfront would have been cleaner.
+
+2. **Use React Query for async operations** — The current approach uses manual loading states. React Query would provide caching, deduplication, and automatic retry out of the box.
+
+3. **Add unit tests earlier** — The diff engine and PDF export utilities have pure function signatures that are straightforward to test. Adding tests alongside implementation would have caught edge cases faster.
+
+4. **Consider server-side diff computation** — For large documents, running diff-match-patch on every page in the browser can be slow. The mock API's diff endpoint shows this could be offloaded to the server.
+
+5. **Implement proper state persistence** — Currently, refreshing the page requires re-uploading. Zustand's `persist` middleware could hydrate from IndexedDB on page load.
+
+### If I Had Another Week
+
+1. **Y.js Real-time Collaboration** — Add a Y.js provider with WebSocket backend for multi-user annotation sessions. Each user would see cursor positions and annotation changes in real-time.
+
+2. **Playwright E2E Tests** — Full user journey tests: upload → annotate → commit → diff → export. Would catch regressions in the PSPDFKit integration that unit tests can't reach.
+
+3. **Cloud Sync** — Replace IndexedDB with a Supabase backend (PostgreSQL for metadata, S3 for PDFs). Add authentication with GitHub OAuth.
+
+4. **Undo/Redo** — Implement a command pattern tracking all annotation operations, with Ctrl+Z/Y to traverse the history stack.
+
+5. **Portable Version Bundles** — Export/import complete version histories as ZIP files containing PDFs + metadata JSON. Enables sharing reviews across teams without a server.
 
 ---
