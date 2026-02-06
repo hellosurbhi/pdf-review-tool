@@ -322,17 +322,18 @@ export function PDFViewer({
         }
 
         // Load PSPDFKit with full configuration
+        // Extract ViewState constructor to avoid "Invalid optional chain from new expression"
+        // that occurs when bundler compiles complex `new (expr).Prop()` patterns
+        const PSPDFKitViewState = (pspdfkitModule as Record<string, unknown>).ViewState as new (config: Record<string, unknown>) => unknown;
+        const initialViewState = new PSPDFKitViewState({ sidebarMode: null });
+
         const instance = await PSPDFKit.load({
           container,
           document: pdfData,
           baseUrl: `${window.location.origin}/pspdfkit-lib/`,
           licenseKey: process.env.NEXT_PUBLIC_PSPDFKIT_LICENSE_KEY,
           disableTextSelection: false,
-          initialViewState: new (pspdfkitModule as unknown as {
-            ViewState: new (config: Record<string, unknown>) => unknown;
-          }).ViewState({
-            sidebarMode: null,
-          }),
+          initialViewState,
           toolbarItems: [
             { type: 'sidebar-thumbnails' },
             { type: 'sidebar-bookmarks' },
