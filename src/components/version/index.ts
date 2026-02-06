@@ -6,3 +6,4 @@
 
 export { CommitDialog } from './CommitDialog';
 export { VersionPanel } from './VersionPanel';
+export { VersionDiff } from './VersionDiff';

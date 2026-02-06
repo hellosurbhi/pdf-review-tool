@@ -408,9 +408,82 @@ pdf-review-tool/
 
 ### What's Next (Phase 4)
 
-- [ ] Diff/comparison between versions (text diff, annotation diff)
-- [ ] Visual diff overlay (side-by-side)
+- [x] Diff/comparison between versions (text diff, annotation diff)
+- [x] Visual diff overlay (per-page diff panel)
 - [ ] Export PDF functionality
 - [ ] Flattened export (annotations burned in)
+
+---
+
+## Phase 4: Version Diff System
+
+**Date:** 2026-02-06
+
+### What Was Built
+
+1. **Diff Engine** (`src/lib/diff-utils.ts`)
+   - `computeTextDiff()`: Loads textContent from IndexedDB for both versions, runs diff-match-patch per page with `diff_cleanupSemantic`, returns per-page results with `hasChanges`, `addedCount`, `removedCount`
+   - `computeAnnotationDiff()`: Compares annotation JSON arrays between versions, detects added (in new but not old), deleted (in old but not new), modified (same id, different properties)
+   - `computeFullDiff()`: Runs both diffs in parallel, produces a `DiffResult` with text diffs, annotation changes, and summary stats
+
+2. **VersionDiff Component** (`src/components/version/VersionDiff.tsx`)
+   - **Diff Controls**: Two dropdown selectors (Base version / Compare with) populated with all versions, Compare button to trigger computation, Exit Diff button to return to normal view
+   - **Text Diff Visualization**: Per-page diff panels with color-coded inline diffs — green highlighted text for additions, red strikethrough for deletions, unchanged text in muted color
+   - **Annotation Diff Display**: List of annotation changes with colored icons — green plus for added, red minus for removed, amber pencil for modified, each with description and page number
+   - **Summary Panel** (right sidebar in diff mode): Total changes count, breakdown by type (text changes across N pages, annotations added/removed/modified), per-page change indicator buttons with navigation
+   - **Change Navigation**: Previous/Next change buttons to cycle through changed pages, current position counter (e.g., "2 / 5")
+   - **Diff Legend**: Always visible during diff mode with color-coded squares (green=added, red=removed, amber=modified), toggle checkboxes to show/hide each diff type in real-time
+   - Loading state with spinner during computation, empty state when no diff computed yet
+
+3. **Type Updates** (`src/types/index.ts`)
+   - Enhanced `TextDiff` with `hasChanges`, `addedCount`, `removedCount` fields
+   - Added `AnnotationDiffResult` and `AnnotationDiffEntry` interfaces
+
+4. **Page Integration** (`src/app/page.tsx`)
+   - Diff button in header (enabled when 2+ versions exist)
+   - Diff mode replaces normal layout (viewer + sidebars) with full-width VersionDiff
+   - "Diff Mode" badge replaces version badge in header during comparison
+   - Commit/Export/unsaved changes hidden during diff mode
+   - Exit Diff restores normal viewer
+
+### Key Technical Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Per-page diff panel instead of overlay** | Exact PDF coordinate positioning is unreliable across versions with different page geometries; a panel view provides accurate, readable diffs |
+| **diff-match-patch with cleanupSemantic** | Character-level diff produces noisy results; semantic cleanup groups related changes for readability |
+| **Parallel diff computation** | Text diff and annotation diff are independent; `Promise.all` halves computation time |
+| **Diff mode replaces main layout** | Diff view needs full width for readable results; switching between viewer and diff is cleaner than overlaying |
+| **Toggle checkboxes in legend** | Users can focus on additions-only or deletions-only during review without re-computing the diff |
+| **Inline diff segments (not side-by-side)** | Inline shows additions and deletions in context; easier to read for text that changed in place |
+
+### Challenges Encountered
+
+1. **diff-match-patch Import**
+   - Package uses CommonJS default export; `import DiffMatchPatch from 'diff-match-patch'` works with `@types/diff-match-patch`
+
+2. **Annotation JSON Parsing**
+   - PSPDFKit Instant JSON format wraps annotations in `{ format, annotations: [...] }` object
+   - Plain array format also possible; `parseAnnotations` handles both
+
+3. **TextDiff Type Enhancement**
+   - Existing `TextDiff` type lacked `hasChanges`, `addedCount`, `removedCount`
+   - Extended interface to support summary statistics without re-computing
+
+### Files Created/Modified
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/lib/diff-utils.ts` | Created | Text diff engine + annotation diff + full comparison |
+| `src/components/version/VersionDiff.tsx` | Created | Diff controls, text/annotation visualization, summary, legend |
+| `src/components/version/index.ts` | Modified | Added VersionDiff export |
+| `src/types/index.ts` | Modified | Enhanced TextDiff, added AnnotationDiffResult/Entry |
+| `src/app/page.tsx` | Modified | Diff button, diff mode toggle, layout switching |
+
+### What's Next (Phase 5)
+
+- [ ] Export PDF with/without annotations
+- [ ] Flattened export (annotations burned into PDF)
+- [ ] Annotated changelog export
 
 ---

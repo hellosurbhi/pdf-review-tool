@@ -128,21 +128,31 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI as Version Panel
-    participant Store as useVersionStore
+    participant UI as VersionDiff
     participant DiffUtils as diff-utils.ts
+    participant DMP as diff-match-patch
     participant DB as Dexie (IndexedDB)
 
-    User->>UI: Select version to compare
-    UI->>Store: setCompareVersion(id)
-    UI->>DB: Get both versions data
-    DB-->>UI: Version A & B data
-    UI->>DiffUtils: compareVersions(vA, vB)
-    DiffUtils->>DiffUtils: diffText(textA, textB)
-    DiffUtils->>DiffUtils: diffAnnotations(annA, annB)
-    DiffUtils-->>UI: DiffResult
-    UI->>Store: setDiffResult(result)
-    Store-->>UI: Update diff view
+    User->>UI: Select base + compare versions
+    User->>UI: Click "Compare"
+    UI->>DiffUtils: computeFullDiff(baseId, compareId)
+    par Text Diff
+        DiffUtils->>DB: versionOps.getById(baseId)
+        DB-->>DiffUtils: baseVersion.textContent
+        DiffUtils->>DB: versionOps.getById(compareId)
+        DB-->>DiffUtils: compareVersion.textContent
+        loop Each page
+            DiffUtils->>DMP: diff_main(oldText, newText)
+            DMP-->>DiffUtils: diffs array
+            DiffUtils->>DMP: diff_cleanupSemantic(diffs)
+        end
+    and Annotation Diff
+        DiffUtils->>DiffUtils: parseAnnotations(base)
+        DiffUtils->>DiffUtils: parseAnnotations(compare)
+        DiffUtils->>DiffUtils: Compare by ID (added/deleted/modified)
+    end
+    DiffUtils-->>UI: DiffResult (textDiffs + annotationChanges + summary)
+    UI->>UI: Render per-page diffs + annotation changes + summary panel
 ```
 
 ## Component Hierarchy
@@ -168,9 +178,16 @@ flowchart TD
         EmptyState["Empty State"]
     end
 
+    subgraph DiffView["Diff Mode (replaces main layout)"]
+        DiffControls["Diff Controls<br/>(base/compare selectors)"]
+        DiffPanel["Per-Page Text Diffs"]
+        DiffAnnotations["Annotation Changes"]
+        DiffSummary["Summary + Legend"]
+    end
+
     subgraph RightSidebar["Right Sidebar (280px)"]
-        VersionHeader["Version Header"]
-        VersionList["VersionList"]
+        VersionPanel["VersionPanel"]
+        AnnotationList["AnnotationList"]
         CreateVersionBtn["Create Version Button"]
     end
 
@@ -178,13 +195,13 @@ flowchart TD
         UploadDialog["UploadDialog"]
         CommitDialog["CommitDialog"]
         ExportDialog["ExportDialog"]
-        DiffViewer["DiffViewer"]
     end
 
     RootLayout --> HomePage
     HomePage --> Header
     HomePage --> LeftSidebar
     HomePage --> MainContent
+    HomePage --> DiffView
     HomePage --> RightSidebar
     HomePage --> Modals
 ```

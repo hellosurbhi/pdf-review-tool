@@ -52,10 +52,12 @@
 ### Diff & Compare
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Select versions to compare | ✅ Implemented | Pick any two versions |
-| Text diff | 📋 Planned | Show text changes between versions |
-| Annotation diff | 📋 Planned | Show annotation changes |
-| Visual diff overlay | 📋 Planned | Side-by-side comparison |
+| Select versions to compare | ✅ Implemented | Two dropdown selectors for base and compare versions |
+| Text diff | ✅ Implemented | Per-page text diff with green additions, red deletions |
+| Annotation diff | ✅ Implemented | Added/removed/modified annotation detection |
+| Diff summary panel | ✅ Implemented | Total changes, per-type breakdown, page navigation |
+| Diff legend | ✅ Implemented | Color-coded legend with visibility toggles |
+| Change navigation | ✅ Implemented | Next/Previous buttons to cycle through changed pages |
 
 ### Export
 | Feature | Status | Description |

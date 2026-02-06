@@ -86,11 +86,14 @@ export interface DiffResult {
 }
 
 /**
- * Text diff between two versions
+ * Text diff between two versions (per-page)
  */
 export interface TextDiff {
   pageIndex: number;
   changes: Array<[number, string]>; // diff-match-patch format: [operation, text]
+  hasChanges: boolean;
+  addedCount: number;
+  removedCount: number;
 }
 
 /**
@@ -102,6 +105,27 @@ export interface DiffSummary {
   annotationsAdded: number;
   annotationsRemoved: number;
   annotationsModified: number;
+}
+
+/**
+ * Result of comparing annotations between two versions
+ */
+export interface AnnotationDiffResult {
+  added: AnnotationDiffEntry[];
+  deleted: AnnotationDiffEntry[];
+  modified: { old: AnnotationDiffEntry; new: AnnotationDiffEntry }[];
+}
+
+/**
+ * Simplified annotation entry for diff comparison
+ */
+export interface AnnotationDiffEntry {
+  id: string;
+  type: string;
+  pageIndex: number;
+  contents?: string;
+  color?: string;
+  boundingBox?: { left: number; top: number; width: number; height: number };
 }
 
 /**
