@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  turbopack: {},
+
   /**
    * Webpack configuration for PSPDFKit
    * PSPDFKit uses WebAssembly and has specific module requirements
