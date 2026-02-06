@@ -28,7 +28,7 @@ export const useVersionStore = create<VersionState>((set, get) => ({
 
   addVersion: (version) =>
     set((state) => ({
-      versions: [version, ...state.versions].sort(
+      versions: [version, ...state.versions.filter((v) => v.id !== version.id)].sort(
         (a, b) => b.versionNumber - a.versionNumber
       ),
       currentVersionId: version.id,

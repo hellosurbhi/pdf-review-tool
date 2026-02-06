@@ -325,7 +325,7 @@ export function PDFViewer({
         const instance = await PSPDFKit.load({
           container,
           document: pdfData,
-          baseUrl: `${window.location.origin}/pspdfkit-lib/`,
+          baseUrl: `${window.location.origin}/`,
           licenseKey: process.env.NEXT_PUBLIC_PSPDFKIT_LICENSE_KEY,
           disableTextSelection: false,
           toolbarItems: [
