@@ -27,12 +27,18 @@
 ### Editing & Annotations
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Highlight text | ✅ Implemented | PSPDFKit text-highlighter tool in toolbar |
-| Add notes | ✅ Implemented | PSPDFKit note annotation tool |
-| Freetext annotations | ✅ Implemented | PSPDFKit text tool in toolbar |
+| Annotation toolbar | ✅ Implemented | Floating toolbar with pointer, highlight, note, text, redaction tools |
+| Highlight with colors | ✅ Implemented | Yellow, green, blue, pink color picker dropdown |
+| Sticky notes | ✅ Implemented | Click to place, popup for text input |
+| Free text box | ✅ Implemented | Click and drag to create positioned text area |
+| Redaction tool | ✅ Implemented | Rectangle redaction mask tool |
 | Ink drawing | ✅ Implemented | PSPDFKit ink tool in toolbar |
-| Text editing | 📋 Planned | Direct text modification |
-| Redaction | 📋 Planned | Permanently remove content |
+| Annotation list | ✅ Implemented | Sidebar list with type icons, page numbers, preview text |
+| Annotation navigation | ✅ Implemented | Click annotation to jump to its page |
+| Annotation deletion | ✅ Implemented | Two-click confirmation delete |
+| Change tracking | ✅ Implemented | Tracks create/update/delete events from PSPDFKit |
+| Unsaved changes badge | ✅ Implemented | Header badge with count of pending changes |
+| Text editing | 📋 Planned | Direct text modification via Content Editor |
 
 ### Version Control
 | Feature | Status | Description |
@@ -175,8 +181,9 @@ src/
 │   └── export/             # ExportDialog, ExportButton
 │
 ├── store/
-│   ├── useDocumentStore.ts # Document state
-│   └── useVersionStore.ts  # Version history state
+│   ├── useDocumentStore.ts  # Document state
+│   ├── useVersionStore.ts   # Version history state
+│   └── useAnnotationStore.ts # Annotation tracking + change log
 │
 ├── lib/
 │   ├── db.ts               # Dexie IndexedDB schema

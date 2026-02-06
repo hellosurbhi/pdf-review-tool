@@ -247,3 +247,100 @@ pdf-review-tool/
 | `src/app/globals.css` | Updated | Added sidebar-dark theme class |
 
 ---
+
+## Phase 2: Annotations and Editing Tools
+
+**Date:** 2026-02-06
+
+### What Was Built
+
+1. **Annotation Change Tracking** (`src/store/useAnnotationStore.ts`)
+   - New Zustand store for tracking annotations and pending changes
+   - `TrackedAnnotation` type normalizes PSPDFKit annotations into our format
+   - `AnnotationChangeRecord` tracks each create/update/delete action
+   - `useUnsavedChangeCount()` selector for unsaved change badge
+   - Changes accumulate until cleared by a version commit
+
+2. **PSPDFKit Annotation Events** (`src/components/pdf/PDFViewer.tsx`)
+   - Listens to `annotations.create`, `annotations.update`, `annotations.delete`
+   - Maps PSPDFKit annotation types to our `AnnotationType` enum
+   - Extracts contents, color, page index from PSPDFKit annotations
+   - Syncs all existing annotations on initial load
+   - Records every change as an `AnnotationChangeRecord`
+
+3. **Annotation Toolbar** (`src/components/pdf/AnnotationToolbar.tsx`)
+   - Floating toolbar below header with annotation tools
+   - Tools: Pointer (select), Highlight (with 4-color picker dropdown), Sticky Note, Free Text, Redaction
+   - Active tool gets highlighted/selected state (`bg-primary/10`)
+   - Color picker shows yellow, green, blue, pink options
+   - Active color indicator when highlight tool is selected
+   - Communicates with PSPDFKit via contentDocument button clicks
+
+4. **Annotation List** (`src/components/pdf/AnnotationList.tsx`)
+   - Right sidebar component listing all annotations
+   - Each entry shows: type icon (color-coded), page number, preview text
+   - Click navigates viewer to annotation's page
+   - Delete with two-click confirmation (3s auto-reset timeout)
+   - Sorted by page index, then creation date
+   - Empty state with "No annotations yet" message
+
+5. **"Unsaved Changes" Badge** (`src/app/page.tsx`)
+   - Amber badge in header shows count of pending changes
+   - Appears when annotation changes exist since last commit
+   - Tooltip explains: "Commit to save these changes as a new version"
+
+6. **Tabbed Right Sidebar** (`src/app/page.tsx`)
+   - Right sidebar now has Versions and Annotations tabs
+   - Annotation tab shows count badge
+   - Clean tab switching within dark sidebar theme
+
+7. **Type System Updates** (`src/types/index.ts`)
+   - Added `TrackedAnnotation` interface for normalized annotations
+   - Added `AnnotationChangeRecord` for change tracking
+   - Added `AnnotationState` store interface
+
+### Key Technical Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Separate annotation store** | Annotation state is high-frequency and independent of version/document state; separate store prevents unnecessary re-renders |
+| **Direct store access via `getState()`** | Event handlers access `useAnnotationStore.getState()` instead of closures to always read latest state |
+| **PSPDFKit type mapping** | Normalize PSPDFKit's diverse annotation types into our 5-enum `AnnotationType` for simpler tracking |
+| **Two-click delete with timeout** | Prevents accidental deletion without a modal dialog; auto-resets after 3 seconds |
+| **Tabbed sidebar** | Keeps version history and annotations in one panel without doubling sidebar width |
+| **Color extraction from PSPDFKit** | Convert PSPDFKit's `{ r, g, b }` color objects to hex strings for storage |
+
+### Challenges Encountered
+
+1. **PSPDFKit Annotation Event Types**
+   - PSPDFKit passes `Immutable.List` objects in event callbacks, not plain arrays
+   - Handled by typing as interface with `forEach` method
+
+2. **TypeScript Strict Color Extraction**
+   - `color.g` and `color.b` needed individual `typeof` checks, not just checking `color.r`
+   - Fixed by adding explicit type guards for all three color channels
+
+3. **Toolbar ↔ PSPDFKit Communication**
+   - PSPDFKit's interaction mode API varies by license; used contentDocument approach as fallback
+   - Built-in toolbar buttons still available for users who prefer them
+
+### Files Created/Modified
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `src/types/index.ts` | Modified | Added TrackedAnnotation, AnnotationChangeRecord, AnnotationState |
+| `src/store/useAnnotationStore.ts` | Created | Annotation tracking Zustand store |
+| `src/components/pdf/PDFViewer.tsx` | Modified | Annotation event listeners, type mapping |
+| `src/components/pdf/AnnotationToolbar.tsx` | Created | Floating annotation tool bar |
+| `src/components/pdf/AnnotationList.tsx` | Created | Sidebar annotation list with navigation |
+| `src/components/pdf/index.ts` | Modified | Added new component exports |
+| `src/app/page.tsx` | Modified | Toolbar integration, tabbed sidebar, unsaved badge |
+
+### What's Next (Phase 3)
+
+- [ ] Version creation with commit message dialog
+- [ ] Version switching and loading
+- [ ] Diff/comparison between versions
+- [ ] Export PDF functionality
+
+---

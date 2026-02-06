@@ -18,6 +18,7 @@ flowchart TB
         subgraph State["State Layer (Zustand)"]
             DocStore["useDocumentStore"]
             VerStore["useVersionStore"]
+            AnnStore["useAnnotationStore"]
         end
 
         subgraph Services["Service Layer"]
@@ -177,6 +178,11 @@ flowchart LR
         VS_Compare["compareVersionId"]
         VS_Diff["diffResult"]
         VS_Comparing["isComparing"]
+    end
+
+    subgraph AnnotationStore["useAnnotationStore"]
+        AS_Annotations["annotations[]"]
+        AS_Changes["pendingChanges[]"]
     end
 
     subgraph IndexedDB["IndexedDB (Dexie)"]
@@ -369,3 +375,25 @@ No Document                    Document Loaded
 ```
 
 Sidebars only render when a document is loaded, keeping the upload screen clean and focused.
+
+## Annotation Event Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant PSPDFKit
+    participant Viewer as PDFViewer
+    participant Store as useAnnotationStore
+    participant UI as AnnotationList + Badge
+
+    User->>PSPDFKit: Create/edit/delete annotation
+    PSPDFKit->>Viewer: annotations.create/update/delete event
+    Viewer->>Viewer: Map PSPDFKit type → AnnotationType
+    Viewer->>Store: addAnnotation() + addChange()
+    Store-->>UI: Re-render annotation list
+    Store-->>UI: Update unsaved changes badge count
+```
+
+The annotation store tracks two arrays:
+- `annotations[]` — current snapshot of all annotations on the document
+- `pendingChanges[]` — change log since last version commit (drives the "unsaved changes" badge)

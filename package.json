@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "postinstall": "cp -R node_modules/pspdfkit/dist/pspdfkit-lib public/pspdfkit-lib || true"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

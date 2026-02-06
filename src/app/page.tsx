@@ -4,10 +4,11 @@
  * Main Application Page
  *
  * Layout structure:
- * - Header bar (56px): title, version badge, commit/export buttons
+ * - Header bar (56px): title, version badge, unsaved changes, commit/export
+ * - Annotation toolbar (when document loaded)
  * - Left sidebar (240px): Page thumbnails, dark theme, collapsible
  * - Main content: PDF viewer or full-screen upload zone
- * - Right sidebar (280px): Version history, dark theme, collapsible
+ * - Right sidebar (280px): Version history + annotation list, dark theme, collapsible
  */
 
 import { useState, useCallback, useRef } from 'react';
@@ -21,6 +22,8 @@ import {
   Download,
   GitCommitHorizontal,
   Clock,
+  MessageSquare,
+  CircleDot,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,15 +35,19 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   PDFUploader,
   PDFViewer,
   PageThumbnails,
+  AnnotationToolbar,
+  AnnotationList,
   goToPage,
   type PSPDFKitInstanceType,
 } from '@/components/pdf';
 import { useDocumentStore } from '@/store/useDocumentStore';
 import { useVersionStore } from '@/store/useVersionStore';
+import { useUnsavedChangeCount, useAnnotations } from '@/store/useAnnotationStore';
 
 export default function Home() {
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
@@ -52,6 +59,8 @@ export default function Home() {
 
   const { currentDocument } = useDocumentStore();
   const { versions, currentVersionId } = useVersionStore();
+  const unsavedCount = useUnsavedChangeCount();
+  const annotations = useAnnotations();
 
   const currentVersion = versions.find((v) => v.id === currentVersionId);
 
@@ -102,6 +111,24 @@ export default function Home() {
           <div className="flex items-center gap-1.5">
             {currentDocument && (
               <>
+                {/* Unsaved changes badge */}
+                {unsavedCount > 0 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge
+                        variant="secondary"
+                        className="bg-amber-500/15 text-amber-600 border-amber-500/25 gap-1 cursor-default"
+                      >
+                        <CircleDot className="h-3 w-3" />
+                        {unsavedCount} unsaved {unsavedCount === 1 ? 'change' : 'changes'}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Commit to save these changes as a new version
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="outline" size="sm" disabled>
@@ -137,6 +164,11 @@ export default function Home() {
             )}
           </div>
         </header>
+
+        {/* Annotation Toolbar (only when document loaded) */}
+        {hasDocument && (
+          <AnnotationToolbar instance={pspdfkitInstanceRef.current} />
+        )}
 
         {/* Main Content Area */}
         <div className="flex flex-1 overflow-hidden">
@@ -221,7 +253,7 @@ export default function Home() {
             )}
           </main>
 
-          {/* Right Sidebar - Version History */}
+          {/* Right Sidebar - Version History + Annotations */}
           {hasDocument && (
             <>
               {/* Toggle Right Sidebar Button (when closed) */}
@@ -237,7 +269,7 @@ export default function Home() {
                       <PanelRightOpen className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="left">Show versions</TooltipContent>
+                  <TooltipContent side="left">Show panel</TooltipContent>
                 </Tooltip>
               )}
 
@@ -250,79 +282,108 @@ export default function Home() {
                 `}
               >
                 <div className="w-70 h-full flex flex-col">
-                  <div className="flex items-center justify-between p-3 border-b border-white/10">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-slate-400" />
-                      <span className="text-sm font-medium text-slate-200">Version History</span>
-                    </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-slate-400 hover:text-slate-200 hover:bg-white/10"
-                          onClick={() => setRightSidebarOpen(false)}
+                  {/* Tabbed panels: Versions | Annotations */}
+                  <Tabs defaultValue="versions" className="flex flex-col h-full">
+                    <div className="flex items-center justify-between px-2 pt-2 border-b border-white/10">
+                      <TabsList className="bg-white/5 h-8">
+                        <TabsTrigger
+                          value="versions"
+                          className="text-xs data-[state=active]:bg-white/10 data-[state=active]:text-slate-200 text-slate-400 gap-1.5 h-6 px-2.5"
                         >
-                          <PanelRightClose className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Close sidebar</TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <ScrollArea className="flex-1">
-                    <div className="p-3 space-y-2">
-                      {versions.length === 0 ? (
-                        <p className="text-sm text-slate-500 text-center py-8">
-                          No versions yet
-                        </p>
-                      ) : (
-                        versions.map((version) => (
-                          <div
-                            key={version.id}
-                            className={`
-                              p-3 rounded-lg border cursor-pointer transition-colors
-                              ${version.id === currentVersionId
-                                ? 'border-blue-500/50 bg-blue-500/10'
-                                : 'border-white/10 hover:bg-white/5'
-                              }
-                            `}
+                          <Clock className="h-3 w-3" />
+                          Versions
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="annotations"
+                          className="text-xs data-[state=active]:bg-white/10 data-[state=active]:text-slate-200 text-slate-400 gap-1.5 h-6 px-2.5"
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          Annotations
+                          {annotations.length > 0 && (
+                            <span className="ml-0.5 text-[10px] bg-white/10 px-1.5 rounded-full">
+                              {annotations.length}
+                            </span>
+                          )}
+                        </TabsTrigger>
+                      </TabsList>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-slate-200 hover:bg-white/10"
+                            onClick={() => setRightSidebarOpen(false)}
                           >
-                            <div className="flex items-center justify-between mb-1">
-                              <Badge
-                                variant="secondary"
+                            <PanelRightClose className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Close panel</TooltipContent>
+                      </Tooltip>
+                    </div>
+
+                    {/* Version History Tab */}
+                    <TabsContent value="versions" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden">
+                      <ScrollArea className="flex-1">
+                        <div className="p-3 space-y-2">
+                          {versions.length === 0 ? (
+                            <p className="text-sm text-slate-500 text-center py-8">
+                              No versions yet
+                            </p>
+                          ) : (
+                            versions.map((version) => (
+                              <div
+                                key={version.id}
                                 className={`
-                                  text-xs font-mono px-1.5 py-0
+                                  p-3 rounded-lg border cursor-pointer transition-colors
                                   ${version.id === currentVersionId
-                                    ? 'bg-blue-500/20 text-blue-300'
-                                    : 'bg-white/10 text-slate-300'
+                                    ? 'border-blue-500/50 bg-blue-500/10'
+                                    : 'border-white/10 hover:bg-white/5'
                                   }
                                 `}
                               >
-                                V{version.versionNumber}
-                              </Badge>
-                              <span className="text-xs text-slate-500">
-                                {new Date(version.createdAt).toLocaleDateString()}
-                              </span>
-                            </div>
-                            <p className="text-sm text-slate-400 truncate">
-                              {version.message}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </ScrollArea>
-                  <div className="p-3 border-t border-white/10">
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      size="sm"
-                      disabled
-                    >
-                      <GitCommitHorizontal className="h-4 w-4 mr-1.5" />
-                      Create Version
-                    </Button>
-                  </div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <Badge
+                                    variant="secondary"
+                                    className={`
+                                      text-xs font-mono px-1.5 py-0
+                                      ${version.id === currentVersionId
+                                        ? 'bg-blue-500/20 text-blue-300'
+                                        : 'bg-white/10 text-slate-300'
+                                      }
+                                    `}
+                                  >
+                                    V{version.versionNumber}
+                                  </Badge>
+                                  <span className="text-xs text-slate-500">
+                                    {new Date(version.createdAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-slate-400 truncate">
+                                  {version.message}
+                                </p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </ScrollArea>
+                      <div className="p-3 border-t border-white/10">
+                        <Button
+                          className="w-full"
+                          variant="outline"
+                          size="sm"
+                          disabled
+                        >
+                          <GitCommitHorizontal className="h-4 w-4 mr-1.5" />
+                          Create Version
+                        </Button>
+                      </div>
+                    </TabsContent>
+
+                    {/* Annotations Tab */}
+                    <TabsContent value="annotations" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden">
+                      <AnnotationList instance={pspdfkitInstanceRef.current} />
+                    </TabsContent>
+                  </Tabs>
                 </div>
               </aside>
             </>

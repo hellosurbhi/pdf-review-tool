@@ -8,3 +8,5 @@ export { PDFUploader } from './PDFUploader';
 export { PDFViewer, goToPage } from './PDFViewer';
 export type { PSPDFKitInstanceType } from './PDFViewer';
 export { PageThumbnails } from './PageThumbnails';
+export { AnnotationToolbar } from './AnnotationToolbar';
+export { AnnotationList } from './AnnotationList';

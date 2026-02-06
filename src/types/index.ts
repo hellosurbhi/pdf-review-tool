@@ -169,6 +169,48 @@ export interface PSPDFKitInstance {
 }
 
 /**
+ * Tracked annotation from PSPDFKit, normalized for our use
+ */
+export interface TrackedAnnotation {
+  id: string;
+  type: AnnotationType;
+  pageIndex: number;
+  contents: string;
+  color: string;
+  createdAt: Date;
+  updatedAt: Date;
+  pspdfkitId: string;
+}
+
+/**
+ * Record of a single annotation change (create/update/delete)
+ */
+export interface AnnotationChangeRecord {
+  id: string;
+  annotationId: string;
+  action: 'create' | 'update' | 'delete';
+  type: AnnotationType;
+  pageIndex: number;
+  contents: string;
+  timestamp: Date;
+}
+
+/**
+ * Annotation store state interface
+ */
+export interface AnnotationState {
+  annotations: TrackedAnnotation[];
+  pendingChanges: AnnotationChangeRecord[];
+  addAnnotation: (annotation: TrackedAnnotation) => void;
+  updateAnnotation: (id: string, updates: Partial<TrackedAnnotation>) => void;
+  removeAnnotation: (id: string) => void;
+  setAnnotations: (annotations: TrackedAnnotation[]) => void;
+  addChange: (change: AnnotationChangeRecord) => void;
+  clearChanges: () => void;
+  reset: () => void;
+}
+
+/**
  * Export format options
  */
 export type ExportFormat = 'pdf' | 'pdf-flattened' | 'annotated-changelog';

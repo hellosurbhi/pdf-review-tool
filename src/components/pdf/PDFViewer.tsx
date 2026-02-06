@@ -3,10 +3,10 @@
 /**
  * PDFViewer Component
  *
- * Renders PDF using PSPDFKit SDK with full toolbar configuration.
+ * Renders PDF using PSPDFKit SDK with full toolbar and annotation support.
  * - Loads dynamically to avoid SSR issues with WebAssembly
  * - Configures toolbar: zoom, page nav, search, annotation tools
- * - Enables text selection, thumbnails sidebar, search with hit count
+ * - Listens to annotation create/update/delete events
  * - Manages PSPDFKit instance lifecycle with proper cleanup
  */
 
@@ -14,6 +14,10 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { versionOps } from '@/lib/db';
+import { useAnnotationStore } from '@/store/useAnnotationStore';
+import { generateId } from '@/lib/db';
+import { AnnotationType } from '@/types';
+import type { TrackedAnnotation, AnnotationChangeRecord } from '@/types';
 
 interface PDFViewerProps {
   versionId: string;
@@ -29,13 +33,28 @@ export interface PSPDFKitInstanceType {
     currentPageIndex: number;
   };
   setViewState: (viewState: (current: ViewState) => ViewState) => void;
-  addEventListener: (event: string, callback: () => void) => void;
-  removeEventListener: (event: string, callback: () => void) => void;
+  addEventListener: (event: string, callback: (...args: unknown[]) => void) => void;
+  removeEventListener: (event: string, callback: (...args: unknown[]) => void) => void;
   exportPDF: () => Promise<ArrayBuffer>;
-  getAnnotations: (pageIndex: number) => Promise<unknown>;
+  getAnnotations: (pageIndex: number) => Promise<PSPDFKitAnnotationList>;
+  delete: (annotationOrId: unknown) => Promise<void>;
   dispose: () => void;
   contentDocument: Document;
   setToolbarItems: (items: ToolbarItem[]) => void;
+}
+
+interface PSPDFKitAnnotationList {
+  size: number;
+  toArray: () => PSPDFKitAnnotation[];
+  forEach: (callback: (annotation: PSPDFKitAnnotation) => void) => void;
+}
+
+export interface PSPDFKitAnnotation {
+  id: string;
+  pageIndex: number;
+  boundingBox: { left: number; top: number; width: number; height: number };
+  customData?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 interface ViewState {
@@ -53,6 +72,59 @@ interface PSPDFKitModule {
   unload: (container: HTMLElement) => Promise<void>;
 }
 
+/**
+ * Map PSPDFKit annotation type name to our AnnotationType enum
+ */
+function mapAnnotationType(pspdfkitType: string): AnnotationType {
+  const typeMap: Record<string, AnnotationType> = {
+    'pspdfkit/highlight': AnnotationType.HIGHLIGHT,
+    'pspdfkit/text-highlight': AnnotationType.HIGHLIGHT,
+    'pspdfkit/note': AnnotationType.NOTE,
+    'pspdfkit/text': AnnotationType.FREETEXT,
+    'pspdfkit/ink': AnnotationType.FREETEXT,
+    'pspdfkit/redaction': AnnotationType.REDACTION,
+    'pspdfkit/markup/highlight': AnnotationType.HIGHLIGHT,
+    'pspdfkit/comment': AnnotationType.NOTE,
+    'pspdfkit/widget': AnnotationType.FREETEXT,
+  };
+  return typeMap[pspdfkitType] ?? AnnotationType.FREETEXT;
+}
+
+/**
+ * Extract annotation contents/preview text
+ */
+function getAnnotationContents(annotation: PSPDFKitAnnotation): string {
+  if (typeof annotation.text === 'string' && annotation.text) {
+    return annotation.text;
+  }
+  if (typeof annotation.contents === 'string' && annotation.contents) {
+    return annotation.contents;
+  }
+  if (typeof annotation.note === 'string' && annotation.note) {
+    return annotation.note;
+  }
+  return '';
+}
+
+/**
+ * Get annotation color as hex string
+ */
+function getAnnotationColor(annotation: PSPDFKitAnnotation): string {
+  const color = annotation.color as { r?: number; g?: number; b?: number } | undefined;
+  if (
+    color &&
+    typeof color.r === 'number' &&
+    typeof color.g === 'number' &&
+    typeof color.b === 'number'
+  ) {
+    const r = Math.round(color.r).toString(16).padStart(2, '0');
+    const g = Math.round(color.g).toString(16).padStart(2, '0');
+    const b = Math.round(color.b).toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`;
+  }
+  return '#ffeb3b';
+}
+
 export function PDFViewer({
   versionId,
   onPageChange,
@@ -64,6 +136,9 @@ export function PDFViewer({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { addAnnotation, updateAnnotation, removeAnnotation, setAnnotations, addChange } =
+    useAnnotationStore();
+
   /**
    * Handle page change events from PSPDFKit
    */
@@ -72,6 +147,133 @@ export function PDFViewer({
       onPageChange(instanceRef.current.viewState.currentPageIndex);
     }
   }, [onPageChange]);
+
+  /**
+   * Convert a PSPDFKit annotation to our TrackedAnnotation type
+   */
+  const toTrackedAnnotation = useCallback(
+    (annotation: PSPDFKitAnnotation): TrackedAnnotation => ({
+      id: generateId(),
+      type: mapAnnotationType(String(annotation.type ?? '')),
+      pageIndex: annotation.pageIndex,
+      contents: getAnnotationContents(annotation),
+      color: getAnnotationColor(annotation),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      pspdfkitId: annotation.id,
+    }),
+    []
+  );
+
+  /**
+   * Handle annotation create event from PSPDFKit
+   */
+  const handleAnnotationCreate = useCallback(
+    (annotations: unknown) => {
+      const list = annotations as PSPDFKitAnnotationList;
+      list.forEach((annotation: PSPDFKitAnnotation) => {
+        const tracked = toTrackedAnnotation(annotation);
+        addAnnotation(tracked);
+
+        const change: AnnotationChangeRecord = {
+          id: generateId(),
+          annotationId: tracked.id,
+          action: 'create',
+          type: tracked.type,
+          pageIndex: tracked.pageIndex,
+          contents: tracked.contents,
+          timestamp: new Date(),
+        };
+        addChange(change);
+      });
+    },
+    [toTrackedAnnotation, addAnnotation, addChange]
+  );
+
+  /**
+   * Handle annotation update event from PSPDFKit
+   */
+  const handleAnnotationUpdate = useCallback(
+    (annotations: unknown) => {
+      const list = annotations as PSPDFKitAnnotationList;
+      list.forEach((annotation: PSPDFKitAnnotation) => {
+        const { annotations: currentAnnotations } = useAnnotationStore.getState();
+        const existing = currentAnnotations.find(
+          (a) => a.pspdfkitId === annotation.id
+        );
+        if (existing) {
+          updateAnnotation(existing.id, {
+            contents: getAnnotationContents(annotation),
+            color: getAnnotationColor(annotation),
+            pageIndex: annotation.pageIndex,
+          });
+
+          const change: AnnotationChangeRecord = {
+            id: generateId(),
+            annotationId: existing.id,
+            action: 'update',
+            type: existing.type,
+            pageIndex: annotation.pageIndex,
+            contents: getAnnotationContents(annotation),
+            timestamp: new Date(),
+          };
+          addChange(change);
+        }
+      });
+    },
+    [updateAnnotation, addChange]
+  );
+
+  /**
+   * Handle annotation delete event from PSPDFKit
+   */
+  const handleAnnotationDelete = useCallback(
+    (annotations: unknown) => {
+      const list = annotations as PSPDFKitAnnotationList;
+      list.forEach((annotation: PSPDFKitAnnotation) => {
+        const { annotations: currentAnnotations } = useAnnotationStore.getState();
+        const existing = currentAnnotations.find(
+          (a) => a.pspdfkitId === annotation.id
+        );
+        if (existing) {
+          removeAnnotation(existing.id);
+
+          const change: AnnotationChangeRecord = {
+            id: generateId(),
+            annotationId: existing.id,
+            action: 'delete',
+            type: existing.type,
+            pageIndex: existing.pageIndex,
+            contents: existing.contents,
+            timestamp: new Date(),
+          };
+          addChange(change);
+        }
+      });
+    },
+    [removeAnnotation, addChange]
+  );
+
+  /**
+   * Load all existing annotations from PSPDFKit into our store
+   */
+  const syncAnnotationsFromInstance = useCallback(
+    async (instance: PSPDFKitInstanceType) => {
+      const allAnnotations: TrackedAnnotation[] = [];
+      for (let i = 0; i < instance.totalPageCount; i++) {
+        try {
+          const pageAnnotations = await instance.getAnnotations(i);
+          pageAnnotations.forEach((annotation: PSPDFKitAnnotation) => {
+            allAnnotations.push(toTrackedAnnotation(annotation));
+          });
+        } catch {
+          // Some pages might fail; continue
+        }
+      }
+      setAnnotations(allAnnotations);
+    },
+    [toTrackedAnnotation, setAnnotations]
+  );
 
   /**
    * Load PSPDFKit and render PDF with full configuration
@@ -117,15 +319,12 @@ export function PDFViewer({
           document: pdfData,
           baseUrl: `${window.location.origin}/pspdfkit-lib/`,
           licenseKey: process.env.NEXT_PUBLIC_PSPDFKIT_LICENSE_KEY,
-          // Enable text selection
           disableTextSelection: false,
-          // Enable built-in sidebar with thumbnails
           initialViewState: new (pspdfkitModule as unknown as {
             ViewState: new (config: Record<string, unknown>) => unknown;
           }).ViewState({
-            sidebarMode: null, // Start without sidebar (we have custom thumbnails)
+            sidebarMode: null,
           }),
-          // Toolbar configuration
           toolbarItems: [
             { type: 'sidebar-thumbnails' },
             { type: 'sidebar-bookmarks' },
@@ -159,8 +358,14 @@ export function PDFViewer({
           onTotalPagesChange(instance.totalPageCount);
         }
 
-        // Add page change listener
+        // Add event listeners
         instance.addEventListener('viewState.currentPageIndex.change', handlePageChange);
+        instance.addEventListener('annotations.create', handleAnnotationCreate);
+        instance.addEventListener('annotations.update', handleAnnotationUpdate);
+        instance.addEventListener('annotations.delete', handleAnnotationDelete);
+
+        // Sync existing annotations
+        await syncAnnotationsFromInstance(instance);
 
         // Notify parent that instance is ready
         if (onInstanceReady) {
@@ -185,11 +390,23 @@ export function PDFViewer({
       const instance = instanceRef.current;
       if (instance) {
         instance.removeEventListener('viewState.currentPageIndex.change', handlePageChange);
+        instance.removeEventListener('annotations.create', handleAnnotationCreate);
+        instance.removeEventListener('annotations.update', handleAnnotationUpdate);
+        instance.removeEventListener('annotations.delete', handleAnnotationDelete);
         instance.dispose();
         instanceRef.current = null;
       }
     };
-  }, [versionId, handlePageChange, onTotalPagesChange, onInstanceReady]);
+  }, [
+    versionId,
+    handlePageChange,
+    handleAnnotationCreate,
+    handleAnnotationUpdate,
+    handleAnnotationDelete,
+    syncAnnotationsFromInstance,
+    onTotalPagesChange,
+    onInstanceReady,
+  ]);
 
   if (error) {
     return (
