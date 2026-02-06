@@ -2,12 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /**
-   * Turbopack configuration (Next.js 16+ default)
-   * Empty config to use Turbopack with webpack fallback for PSPDFKit
-   */
-  turbopack: {},
-
-  /**
    * Webpack configuration for PSPDFKit
    * PSPDFKit uses WebAssembly and has specific module requirements
    */
